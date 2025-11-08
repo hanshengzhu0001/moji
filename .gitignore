@@ -1,8 +1,7 @@
 # Dependencies
 node_modules/
-dist/
-dist-electron/
-build/
+bun.lockb
+package-lock.json
 
 # Environment
 .env
@@ -24,6 +23,19 @@ npm-debug.log*
 # Audio files
 *.mp3
 audio/
+test-*.mp3
+
+# Test files
+test-*.ts
+test-*.txt
+
+# Build outputs
+dist/
+dist-electron/
+build/
+*.js.map
+*.d.ts
+*.tsbuildinfo
 
 # IDE
 .vscode/
@@ -34,7 +46,3 @@ audio/
 # OS
 .DS_Store
 Thumbs.db
-
-# Build
-*.js.map
-*.d.ts

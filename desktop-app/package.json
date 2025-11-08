@@ -1,0 +1,36 @@
+{
+  "name": "moji-desktop-pet",
+  "version": "1.0.0",
+  "description": "Desktop pet client for Moji",
+  "main": "dist-electron/main.js",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build && electron-builder",
+    "preview": "vite preview",
+    "electron:dev": "concurrently \"vite\" \"electron .\""
+  },
+  "dependencies": {
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
+  },
+  "devDependencies": {
+    "@types/react": "^18.2.45",
+    "@types/react-dom": "^18.2.18",
+    "@vitejs/plugin-react": "^4.2.1",
+    "electron": "^28.1.0",
+    "electron-builder": "^24.9.1",
+    "typescript": "^5.3.3",
+    "vite": "^5.0.8",
+    "vite-plugin-electron": "^0.28.1",
+    "concurrently": "^8.2.2"
+  },
+  "build": {
+    "appId": "com.nori.pet",
+    "mac": {
+      "category": "public.app-category.lifestyle"
+    }
+  }
+}
+
+

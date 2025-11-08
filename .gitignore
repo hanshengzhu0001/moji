@@ -31,3 +31,8 @@ Thumbs.db
 *.d.ts
 
 
+
+# Environment variables
+.env
+*.env.local
+*.env.*.local

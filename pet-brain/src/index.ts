@@ -1,16 +1,20 @@
 import "dotenv/config";
 import Fastify from "fastify";
 import cors from "@fastify/cors";
-import Database from "better-sqlite3";
+import { Database } from "bun:sqlite";
 import { request } from "undici";
 import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { agent } from "./agent";
+import { generateAnimalVoice } from "./elevenlabs";
+import { generateSticker } from "./sticker";
 
 const PORT = parseInt(process.env.PORT || "3001");
 const BRIDGE_URL = process.env.BRIDGE_URL || "http://localhost:3000";
 const IMGFLIP_USERNAME = process.env.IMGFLIP_USERNAME!;
 const IMGFLIP_PASSWORD = process.env.IMGFLIP_PASSWORD!;
+const ELEVENLABS_API_KEY = process.env.ELEVENLABS_API_KEY;
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 
 const fastify = Fastify({ logger: true });
 await fastify.register(cors, { origin: true });
@@ -114,7 +118,7 @@ fastify.post<{ Body: { chatId: string; userId: string; text: string; ts: string 
       .run(chatId, userId, text, ts);
     
     // Ensure user exists
-    db.prepare("INSERT OR IGNORE INTO users (userId, displayName) VALUES (?, ?, ?)")
+    db.prepare("INSERT OR IGNORE INTO users (userId, displayName) VALUES (?, ?)")
       .run(userId, userId.slice(0, 20));
     
     // Use Dedalus Agent for mood classification (async, don't block)
@@ -194,6 +198,42 @@ fastify.post<{ Body: { chatId: string; userId: string; topic: string } }>(
         return { success: true, memeUrl, template: template.name };
       } catch (e: any) {
         console.error("[MEME] Send error:", e);
+        return { success: false, error: e.message };
+      }
+    }
+    
+    return { success: false, error: "Generation failed" };
+  }
+);
+
+// Handle sticker generation requests
+fastify.post<{ Body: { chatId: string; userId: string; prompt: string; style?: string } }>(
+  '/events/sticker-request',
+  async (req, reply) => {
+    const { chatId, userId, prompt, style = "cute" } = req.body;
+    
+    console.log(`[STICKER] Request from ${userId.slice(0, 15)}: "${prompt}" (${style})`);
+    
+    // Generate sticker using DALL-E 3
+    const stickerUrl = await generateSticker(prompt, style as "cute" | "funny" | "sad" | "excited");
+    
+    if (stickerUrl) {
+      // Send to chat via bridge
+      try {
+        await request(`${BRIDGE_URL}/bridge/say-meme`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            chatId,
+            imageUrl: stickerUrl,
+            text: "🎨 Moji sticker!"
+          })
+        });
+        
+        console.log(`[STICKER] ✅ Sent sticker: ${prompt}`);
+        return { success: true, stickerUrl };
+      } catch (e: any) {
+        console.error("[STICKER] Send error:", e);
         return { success: false, error: e.message };
       }
     }
@@ -403,6 +443,59 @@ fastify.post('/tick', async (req, reply) => {
     if (agentResponse.action === "speak_to_user" && agentResponse.utterance) {
       const { targetUserId, utterance } = agentResponse;
       
+      // Generate voice audio using ElevenLabs
+      let audioUrl: string | null = null;
+      if (process.env.ELEVENLABS_API_KEY) {
+        try {
+          const audioBuffer = await generateAnimalVoice(
+            utterance.text,
+            utterance.voiceKind,
+            utterance.voiceDurationHint
+          );
+          
+          if (audioBuffer) {
+            // Upload to S3 or save locally
+            // For now, we'll store it as a moment
+            const eventId = `voice_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+            
+            // If S3 is configured, upload there
+            if (process.env.AWS_BUCKET_NAME) {
+              const s3 = new S3Client({ region: process.env.AWS_REGION || "us-east-1" });
+              const key = `voices/${targetUserId}/${eventId}.mp3`;
+              
+              await s3.send(new PutObjectCommand({
+                Bucket: process.env.AWS_BUCKET_NAME,
+                Key: key,
+                Body: audioBuffer,
+                ContentType: "audio/mpeg",
+              }));
+              
+              audioUrl = `https://${process.env.AWS_BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/${key}`;
+            } else {
+              // Fallback: save to local file for testing
+              const fs = await import("fs/promises");
+              const path = await import("path");
+              const audioDir = path.join(process.cwd(), "audio");
+              try {
+                await fs.mkdir(audioDir, { recursive: true });
+                const filename = path.join(audioDir, `voice_${Date.now()}_${Math.random().toString(36).slice(2, 9)}.mp3`);
+                await fs.writeFile(filename, audioBuffer);
+                audioUrl = `file://${filename}`;
+                console.log(`[TICK] ✅ Saved audio to ${filename}`);
+              } catch (e) {
+                console.error("[TICK] Failed to save audio file:", e);
+                // Fallback to base64 if file save fails
+                audioUrl = `data:audio/mpeg;base64,${audioBuffer.toString("base64").slice(0, 100)}...`;
+              }
+            }
+            
+            console.log(`[TICK] ✅ Generated voice audio for ${targetUserId?.slice(0, 15)}`);
+          }
+        } catch (e) {
+          console.error("[TICK] Voice generation error:", e);
+        }
+      }
+      
       db.prepare(`
         INSERT OR REPLACE INTO utterances (userId, text, voiceKind, voiceDurationHint, ts)
         VALUES (?, ?, ?, ?, ?)
@@ -413,6 +506,24 @@ fastify.post('/tick', async (req, reply) => {
         utterance.voiceDurationHint,
         new Date().toISOString()
       );
+      
+      // If audio was generated, store it as a moment
+      if (audioUrl) {
+        db.prepare(`
+          INSERT INTO moments (eventId, groupId, userId, type, s3Url, durationSec, shortDesc, ts, shareable)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `).run(
+          `voice_${Date.now()}`,
+          "main",
+          targetUserId,
+          "audio",
+          audioUrl,
+          utterance.voiceDurationHint === "short" ? 3 : utterance.voiceDurationHint === "medium" ? 5 : 8,
+          `Voice: ${utterance.text.slice(0, 50)}`,
+          new Date().toISOString(),
+          0 // Not shareable, private to user
+        );
+      }
       
       console.log(`[TICK] ✅ Utterance for ${targetUserId?.slice(0, 15)}: "${utterance.text}"`);
     } else if (agentResponse.action === "broadcast_in_chat" && agentResponse.chatMessage) {

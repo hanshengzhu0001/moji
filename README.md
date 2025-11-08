@@ -110,8 +110,11 @@ BRIDGE_URL=http://localhost:3000
 IMGFLIP_USERNAME=HansZHU1
 IMGFLIP_PASSWORD=@1World1Dream
 
-# OpenAI (for Dedalus Agent)
+# OpenAI (for Dedalus Agent + Sticker Generation)
 OPENAI_API_KEY=your_openai_key_here
+
+# Optional: ElevenLabs (for animal voice generation)
+ELEVENLABS_API_KEY=your_elevenlabs_key_here
 
 # Optional: Dedalus API key if using their hosted version
 DEDALUS_API_KEY=
@@ -157,7 +160,14 @@ Moji will post a contextual meme! 🎉
 ```
 @moji share a meme about finals
 @moji meme me: cats and exams
-nori meme: stress and deadlines
+@moji meme: stress and deadlines
+```
+
+### Request Sticker (from iMessage)
+```
+@moji sticker: a cute cat with big eyes
+@moji make a sticker of a happy friend group
+@moji generate sticker: a stressed student (funny style)
 ```
 
 ### Request Meme (from Desktop)
@@ -220,6 +230,8 @@ const response = runner.run({
 | Pet Brain | Node.js + Fastify + SQLite + **Dedalus Agent** |
 | AI/LLM | **OpenAI GPT-4** or Claude via Dedalus MCP |
 | Meme Engine | Imgflip API |
+| Sticker Generation | OpenAI DALL-E 3 |
+| Voice TTS | ElevenLabs API |
 | Desktop App | Electron + React + Vite |
 | Audio | Web Audio API + MediaRecorder |
 | Storage | AWS S3 + presigned URLs |
@@ -245,6 +257,13 @@ const response = runner.run({
 4. Brain calls Imgflip → generates meme
 5. Bridge posts meme to group chat
 
+### Workflow D: Sticker Request
+
+1. User types in chat: `@moji sticker: a cute cat`
+2. Bridge detects command → `/events/sticker-request`
+3. Brain calls DALL-E 3 → generates sticker image
+4. Bridge posts sticker to group chat
+
 ### Workflow C: Share Moment
 
 1. User records audio in desktop app
@@ -261,6 +280,7 @@ const response = runner.run({
 
 **POST** `/events/message` - Receive message from chat  
 **POST** `/events/meme-request` - Generate & post meme  
+**POST** `/events/sticker-request` - Generate & post sticker  
 **POST** `/events/shareable` - Store shared moment  
 **GET** `/pet/state?userId=...` - Get pet state for desktop  
 **GET/POST** `/user/preferences` - Manage settings  

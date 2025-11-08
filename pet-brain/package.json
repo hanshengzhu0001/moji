@@ -5,17 +5,17 @@
   "type": "module",
   "scripts": {
     "dev": "bun run src/index.ts",
-    "start": "bun run src/index.ts"
+    "start": "bun run src/index.ts",
+    "test:elevenlabs": "bun run test-elevenlabs.ts",
+    "test:sticker": "bun run test-sticker.ts"
   },
   "dependencies": {
     "fastify": "^4.26.0",
     "@fastify/cors": "^8.5.0",
-    "better-sqlite3": "^9.2.2",
     "dotenv": "^16.3.1",
     "undici": "^6.0.1",
     "@aws-sdk/client-s3": "^3.490.0",
-    "@aws-sdk/s3-request-presigner": "^3.490.0",
-    "@dedalus/agents": "^0.1.0"
+    "@aws-sdk/s3-request-presigner": "^3.490.0"
   },
   "devDependencies": {
     "@types/node": "^20.10.6",
@@ -23,5 +23,3 @@
     "typescript": "^5.3.3"
   }
 }
-
-

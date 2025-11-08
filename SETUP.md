@@ -59,8 +59,11 @@ BRIDGE_URL=http://localhost:3000
 IMGFLIP_USERNAME=HansZHU1
 IMGFLIP_PASSWORD=@1World1Dream
 
-# OpenAI (for Dedalus Agent - required!)
+# OpenAI (for Dedalus Agent + Sticker Generation - required!)
 OPENAI_API_KEY=your_openai_key_here
+
+# Optional: ElevenLabs (for animal voice generation)
+ELEVENLABS_API_KEY=your_elevenlabs_key_here
 
 # Optional: Dedalus hosted service
 DEDALUS_API_KEY=

@@ -1,0 +1,10 @@
+.env
+node_modules
+*.log
+*.mp3
+audio/
+*.db
+*.db-shm
+*.db-wal
+.DS_Store
+

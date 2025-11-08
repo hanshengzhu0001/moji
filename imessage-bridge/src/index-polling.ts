@@ -4,7 +4,7 @@ import Fastify from "fastify";
 import { request } from "undici";
 
 const BRAIN_URL = process.env.BRAIN_URL || "http://localhost:3001";
-const TARGET_CHAT_ID = process.env.TARGET_CHAT_ID!; // The group chat to monitor
+const TARGET_CHAT_ID = process.env.TARGET_CHAT_ID!;
 const PORT = parseInt(process.env.PORT || "3000");
 
 const fastify = Fastify({ logger: true });
@@ -36,7 +36,6 @@ function extractStickerRequest(text: string): { prompt: string; style?: string }
     const match = text.match(pattern);
     if (match) {
       const prompt = match[1].trim();
-      // Extract style if mentioned
       const styleMatch = prompt.match(/(cute|funny|sad|excited)/i);
       const style = styleMatch ? styleMatch[1].toLowerCase() : "cute";
       return { prompt, style };
@@ -59,14 +58,14 @@ async function processMessage(message: any) {
   if (message.chatId !== TARGET_CHAT_ID) {
     return;
   }
-    
-    const text = message.text ?? "";
+
+  const text = message.text ?? "";
   if (!text) {
     return;
   }
-    
-    const userId = message.sender || "unknown";
-    console.log(`[iMessage] ${userId.slice(0, 20)}: "${text.slice(0, 60)}..."`);
+
+  const userId = message.sender || "unknown";
+  console.log(`[iMessage] ${userId.slice(0, 20)}: "${text.slice(0, 60)}..."`);
 
   // Check for sticker commands
   const stickerReq = extractStickerRequest(text);
@@ -88,105 +87,71 @@ async function processMessage(message: any) {
     }
     return;
   }
-    
-    // Check for meme commands
-    const memeTopic = extractMemeRequest(text);
-    if (memeTopic) {
-      console.log(`[MEME REQ] Topic: ${memeTopic}`);
-      try {
-        await request(`${BRAIN_URL}/events/meme-request`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            chatId: message.chatId,
-            userId,
-            topic: memeTopic
-          })
-        });
-      } catch (e) {
-        console.error("[MEME REQ] Error:", e);
-      }
-      return;
-    }
-    
-    // Forward all messages to Brain
+
+  // Check for meme commands
+  const memeTopic = extractMemeRequest(text);
+  if (memeTopic) {
+    console.log(`[MEME REQ] Topic: ${memeTopic}`);
     try {
-      await request(`${BRAIN_URL}/events/message`, {
+      await request(`${BRAIN_URL}/events/meme-request`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           chatId: message.chatId,
           userId,
-          text,
-          ts: new Date().toISOString()
+          topic: memeTopic
         })
       });
     } catch (e) {
-      console.error("[FORWARD] Error:", e);
+      console.error("[MEME REQ] Error:", e);
     }
+    return;
+  }
+
+  // Forward all messages to Brain
+  try {
+    await request(`${BRAIN_URL}/events/message`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        chatId: message.chatId,
+        userId,
+        text,
+        ts: new Date().toISOString()
+      })
+    });
+  } catch (e) {
+    console.error("[FORWARD] Error:", e);
+  }
 }
 
-// Manual polling loop (more reliable than startWatching)
-let lastPollTime = Date.now();
-
+// Manual polling loop
 async function pollMessages() {
-  console.log(`[POLL] Starting message polling for chat: ${TARGET_CHAT_ID}`);
   while (true) {
     try {
       const unreadMessages = await sdk.getUnreadMessages();
-      console.log(`[POLL] Found ${unreadMessages.length} unread message groups`);
       
-      let processedCount = 0;
       for (const messageGroup of unreadMessages) {
         if (messageGroup.messages && Array.isArray(messageGroup.messages)) {
           for (const message of messageGroup.messages) {
-            console.log(`[POLL] Checking message: chatId=${message.chatId}, target=${TARGET_CHAT_ID}, text=${message.text?.slice(0, 30)}`);
-            if (message.chatId === TARGET_CHAT_ID || message.chatId?.includes(TARGET_CHAT_ID) || TARGET_CHAT_ID.includes(message.chatId || "")) {
-              console.log(`[POLL] ✅ Message matches target chat!`);
-              await processMessage(message);
-              processedCount++;
-            } else {
-              console.log(`[POLL] ⏭️  Skipping message from different chat: ${message.chatId}`);
-            }
+            await processMessage(message);
           }
         } else {
           // Handle single message format
-          const msg = messageGroup as any;
-          console.log(`[POLL] Checking single message: chatId=${msg.chatId}, target=${TARGET_CHAT_ID}`);
-          if (msg.chatId === TARGET_CHAT_ID || msg.chatId?.includes(TARGET_CHAT_ID) || TARGET_CHAT_ID.includes(msg.chatId || "")) {
-            console.log(`[POLL] ✅ Single message matches target chat!`);
-            await processMessage(msg);
-            processedCount++;
-          }
+          await processMessage(messageGroup);
         }
-      }
-      
-      if (processedCount > 0) {
-        console.log(`[POLL] Processed ${processedCount} messages from target chat`);
-      }
-      
-      // Also try getMessages for the specific chat
-      try {
-        const chatMessages = await (sdk as any).getMessages?.(TARGET_CHAT_ID, { limit: 5 });
-        if (chatMessages && chatMessages.length > 0) {
-          console.log(`[POLL] Got ${chatMessages.length} messages via getMessages`);
-          for (const message of chatMessages) {
-            await processMessage(message);
-          }
-        }
-      } catch (e) {
-        // getMessages might not exist, that's fine
       }
     } catch (e) {
       console.error("[POLL] Error:", e);
     }
     
-    // Poll every 2 seconds
-    await new Promise(resolve => setTimeout(resolve, 2000));
+    // Poll every 3 seconds
+    await new Promise(resolve => setTimeout(resolve, 3000));
   }
 }
 
-// Start polling in background
+// Start polling
+console.log(`[POLL] Starting message polling for chat: ${TARGET_CHAT_ID}`);
 pollMessages().catch(console.error);
 
 // HTTP API for Brain to send messages back
@@ -219,5 +184,4 @@ console.log(`🌉 iMessage Bridge listening on port ${PORT}`);
 console.log(`📱 Watching chat: ${TARGET_CHAT_ID}`);
 
 process.stdin.resume();
-
 

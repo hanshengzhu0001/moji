@@ -16,6 +16,10 @@ interface AgentResponse {
     voiceDurationHint: "short" | "medium" | "long";
   };
   chatMessage?: string;
+  // Sticker decision fields
+  shouldGenerateSticker?: boolean;
+  stickerPrompt?: string;
+  stickerStyle?: "cute" | "funny" | "sad" | "excited";
 }
 
 // Mock Dedalus runner for now - replace with actual SDK when integrated
@@ -34,6 +38,10 @@ class DedalusAgent {
     
     if (mode === "pet_decision") {
       return this.makePetDecision(context);
+    }
+    
+    if (mode === "sticker_decision") {
+      return this.decideSticker(context);
     }
     
     return {};
@@ -152,6 +160,130 @@ class DedalusAgent {
     
     const messages = encouragements[mood] || ["Moji is watching over the group! 😺"];
     return messages[Math.floor(Math.random() * messages.length)];
+  }
+  
+  private decideSticker(context: {
+    messageText: string;
+    isFromMe: boolean;
+    userId: string;
+    userMood: string;
+    // recentMessages removed - only react to latest message
+  }): AgentResponse {
+    const text = context.messageText.toLowerCase();
+    const isFromMe = context.isFromMe;
+    const userMood = context.userMood;
+    
+    // Generate stickers with higher probability for testing (80% for reactions, 70% for accompanying)
+    // TODO: Lower these back to 0.3/0.2 for production if too frequent
+    const random = Math.random();
+    const threshold = isFromMe ? 0.7 : 0.8; // Higher chance to see stickers in action
+    
+    console.log(`[STICKER DECISION] Random: ${random.toFixed(2)}, Threshold: ${threshold}, Will generate: ${random <= threshold}`);
+    
+    if (random > threshold) {
+      console.log(`[STICKER DECISION] ❌ Skipping sticker generation (random ${random.toFixed(2)} > ${threshold})`);
+      return { shouldGenerateSticker: false };
+    }
+    
+    console.log(`[STICKER DECISION] ✅ Will generate sticker!`);
+    
+    // Extract key words and emotions from message
+    let stickerPrompt = "";
+    let stickerStyle: "cute" | "funny" | "sad" | "excited" = "cute";
+    
+    // For reactions (messages from others)
+    if (!isFromMe) {
+      // Happy/excited reactions
+      if (/(happy|great|awesome|amazing|love|excited|yay|woo|yes|celebrate)/.test(text)) {
+        stickerPrompt = "celebrating";
+        stickerStyle = "excited";
+      }
+      // Stressed/sad reactions
+      else if (/(stress|anxious|worried|nervous|overwhelmed|panic|sad|down|depressed)/.test(text)) {
+        stickerPrompt = "supportive";
+        stickerStyle = "sad";
+      }
+      // Funny/silly reactions
+      else if (/(lol|lmao|haha|funny|joke|hilarious|silly)/.test(text)) {
+        stickerPrompt = "laughing";
+        stickerStyle = "funny";
+      }
+      // Food-related
+      else if (/(food|eat|hungry|pizza|coffee|breakfast|lunch|dinner|snack)/.test(text)) {
+        stickerPrompt = "food";
+        stickerStyle = "funny";
+      }
+      // Study/work related
+      else if (/(study|work|homework|project|exam|test|final|deadline)/.test(text)) {
+        stickerPrompt = "studying";
+        stickerStyle = "cute";
+      }
+      // Sleep/tired
+      else if (/(sleep|tired|bed|nap|rest|exhausted)/.test(text)) {
+        stickerPrompt = "sleepy";
+        stickerStyle = "cute";
+      }
+      // Default: extract main topic
+      else {
+        // Try to extract nouns or key phrases
+        const words = text.split(/\s+/).filter(w => w.length > 3);
+        if (words.length > 0) {
+          stickerPrompt = words[0];
+        } else {
+          stickerPrompt = "reacting";
+        }
+        stickerStyle = "cute";
+      }
+    }
+    // For accompanying stickers (user's own messages)
+    else {
+      // Enhance user's message with a complementary meme
+      if (/(happy|great|awesome|amazing|love|excited|yay|woo|yes)/.test(text)) {
+        stickerPrompt = "celebrating";
+        stickerStyle = "excited";
+      }
+      else if (/(stress|anxious|worried|nervous|overwhelmed)/.test(text)) {
+        stickerPrompt = "stressed";
+        stickerStyle = "sad";
+      }
+      else if (/(food|eat|hungry|pizza|coffee)/.test(text)) {
+        stickerPrompt = "food";
+        stickerStyle = "funny";
+      }
+      else if (/(study|work|homework|project|exam)/.test(text)) {
+        stickerPrompt = "studying";
+        stickerStyle = "cute";
+      }
+      else {
+        // Extract main topic from user's message
+        const words = text.split(/\s+/).filter(w => w.length > 3 && !/(the|and|but|for|are|with)/.test(w));
+        if (words.length > 0) {
+          stickerPrompt = words[0];
+        } else {
+          stickerPrompt = "reacting";
+        }
+        stickerStyle = "cute";
+      }
+    }
+    
+    // Adjust style based on user mood if available
+    if (userMood === "sad") {
+      stickerStyle = "cute"; // Use cute for support
+    } else if (userMood === "excited") {
+      stickerStyle = "excited";
+    } else if (userMood === "stressed") {
+      stickerStyle = "cute"; // Use cute for comfort
+    }
+    
+    const result = {
+      shouldGenerateSticker: true,
+      stickerPrompt,
+      stickerStyle
+    };
+    
+    console.log(`[STICKER DECISION] Result: prompt="${stickerPrompt}", style="${stickerStyle}"`);
+    
+    return result;
   }
 }
 

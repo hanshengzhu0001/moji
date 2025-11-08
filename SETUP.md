@@ -59,7 +59,7 @@ BRIDGE_URL=http://localhost:3000
 IMGFLIP_USERNAME=HansZHU1
 IMGFLIP_PASSWORD=@1World1Dream
 
-# OpenAI (for Dedalus Agent + Sticker Generation - required!)
+# OpenAI (for Dedalus Agent - required!)
 OPENAI_API_KEY=your_openai_key_here
 
 # Optional: ElevenLabs (for animal voice generation)
@@ -155,14 +155,19 @@ Opens browser at: `http://localhost:5173`
 
 ### Step 7: Test!
 
-#### Test Meme Generation
+#### Test Automatic Meme Generation
 
-In your group iMessage chat, type:
+In your group iMessage chat, send a message like:
 ```
-@moji share a meme about finals
+I need coffee for studying!
 ```
 
-You should see a meme appear! 🎉
+Moji will automatically generate a meme (80% chance) and send it to the chat! 🎉
+
+You can also manually request memes:
+```
+@moji meme: finals stress
+```
 
 #### Test Desktop Pet
 

@@ -108,14 +108,42 @@ stmt.run("main", process.env.TARGET_CHAT_ID || "default", "chill", 0, 1);
 // API Endpoints
 
 // Receive messages from iMessage
-fastify.post<{ Body: { chatId: string; userId: string; text: string; ts: string } }>(
+fastify.post<{ Body: { chatId: string; userId: string; text: string; ts: string; isFromMe?: boolean } }>(
   '/events/message',
   async (req, reply) => {
-    const { chatId, userId, text, ts } = req.body;
+    const { chatId, userId, text, ts, isFromMe = false } = req.body;
+    
+    // Skip empty messages (they won't generate good stickers)
+    if (!text || text.trim().length === 0) {
+      return { success: true, skipped: true, reason: "empty_message" };
+    }
     
     // Store message
     db.prepare("INSERT INTO messages (chatId, userId, text, ts) VALUES (?, ?, ?, ?)")
       .run(chatId, userId, text, ts);
+    
+    // Keep only last 20 messages per chat (cleanup old messages)
+    try {
+      // Count messages for this chat
+      const count: any = db.prepare("SELECT COUNT(*) as count FROM messages WHERE chatId = ?").get(chatId);
+      if (count && count.count > 20) {
+        // Delete oldest messages, keeping only the last 20
+        db.prepare(`
+          DELETE FROM messages
+          WHERE chatId = ?
+          AND id IN (
+            SELECT id FROM messages
+            WHERE chatId = ?
+            ORDER BY ts ASC
+            LIMIT ?
+          )
+        `).run(chatId, chatId, count.count - 20);
+        console.log(`[CLEANUP] Cleaned up ${count.count - 20} old messages for chat ${chatId}`);
+      }
+    } catch (e) {
+      // Ignore cleanup errors
+      console.error("[CLEANUP] Error cleaning up old messages:", e);
+    }
     
     // Ensure user exists
     db.prepare("INSERT OR IGNORE INTO users (userId, displayName) VALUES (?, ?)")
@@ -139,6 +167,123 @@ fastify.post<{ Body: { chatId: string; userId: string; text: string; ts: string 
         }
       } catch (e) {
         console.error("[MOOD] Classification error:", e);
+      }
+    })();
+    
+    // Automatic sticker generation based on latest message only (async, don't block)
+    (async () => {
+      try {
+        // Get user mood (but don't use message history for sticker generation)
+        const user: any = db.prepare("SELECT * FROM users WHERE userId = ?").get(userId);
+        const userMood = user?.lastMood || "neutral";
+        
+        // Call agent to decide if we should generate a sticker
+        // Only react to the latest message, no context from other messages
+        const stickerDecision = await agent.callAgent("sticker_decision", {
+          messageText: text,
+          isFromMe, // true if message is from the user themselves
+          userId,
+          userMood
+          // Removed recentMessages - only react to current message
+        });
+        
+        // Generate meme/sticker using Imgflip if agent recommends it
+        console.log(`[STICKER AUTO] Decision: shouldGenerate=${stickerDecision.shouldGenerateSticker}, prompt="${stickerDecision.stickerPrompt}"`);
+        
+        if (stickerDecision.shouldGenerateSticker && stickerDecision.stickerPrompt) {
+          const stickerStyle = stickerDecision.stickerStyle || "cute";
+          const stickerPrompt = stickerDecision.stickerPrompt;
+          
+          console.log(`[STICKER AUTO] 🎨 Generating ${isFromMe ? 'accompanying' : 'reaction'} meme: "${stickerPrompt}" (${stickerStyle})`);
+          
+          // Convert sticker prompt/style into meme template and text
+          // Select appropriate meme template based on style and prompt
+          let templateHint = "drake"; // default
+          let topText = "";
+          let bottomText = "";
+          
+          // Clean up the prompt (remove "a " prefix if present)
+          const cleanPrompt = stickerPrompt.replace(/^a /, "").replace(/ with .*$/, "").replace(/ animal.*$/, "");
+          
+          // Map sticker styles and prompts to meme templates
+          if (stickerStyle === "funny" || stickerPrompt.includes("laughing") || stickerPrompt.includes("funny")) {
+            templateHint = "drake hotline bling";
+            topText = "Not reacting";
+            bottomText = cleanPrompt.charAt(0).toUpperCase() + cleanPrompt.slice(1);
+          } else if (stickerStyle === "excited" || stickerPrompt.includes("celebrating") || stickerPrompt.includes("happy")) {
+            templateHint = "distracted boyfriend";
+            topText = text.slice(0, 40) || "Normal messages";
+            bottomText = cleanPrompt.charAt(0).toUpperCase() + cleanPrompt.slice(1) + "! 🎉";
+          } else if (stickerStyle === "sad" || stickerPrompt.includes("stressed") || stickerPrompt.includes("supportive")) {
+            templateHint = "this is fine";
+            topText = text.slice(0, 40) || "Everything";
+            bottomText = "This is fine";
+          } else if (stickerPrompt.includes("study") || stickerPrompt.includes("exam") || stickerPrompt.includes("work")) {
+            templateHint = "this is fine";
+            topText = text.slice(0, 40) || "Studying";
+            bottomText = "This is fine";
+          } else if (stickerPrompt.includes("food") || stickerPrompt.includes("coffee") || stickerPrompt.includes("eat")) {
+            templateHint = "drake hotline bling";
+            topText = "Not having " + cleanPrompt;
+            bottomText = "Having " + cleanPrompt + " 🍕";
+          } else if (stickerPrompt.includes("sleep") || stickerPrompt.includes("tired")) {
+            templateHint = "this is fine";
+            topText = text.slice(0, 40) || "Being awake";
+            bottomText = "Sleeping 😴";
+          } else {
+            // Cute/default - use drake
+            templateHint = "drake hotline bling";
+            topText = text.slice(0, 40) || "Not " + cleanPrompt;
+            bottomText = cleanPrompt.charAt(0).toUpperCase() + cleanPrompt.slice(1);
+          }
+          
+          // Find template
+          const template = findTemplate(templateHint) || Object.values(MEME_CATALOG)[0];
+          
+          if (!template) {
+            console.log(`[STICKER AUTO] ❌ No meme template found`);
+            return;
+          }
+          
+          console.log(`[STICKER AUTO] Using template: ${template.name}, Top: "${topText}", Bottom: "${bottomText}"`);
+          
+          // Generate meme via Imgflip
+          const memeUrl = await captionMeme(template.id, topText, bottomText);
+          
+          if (memeUrl) {
+            console.log(`[STICKER AUTO] ✅ Generated meme URL: ${memeUrl}`);
+            
+            // Add a small delay for reactions (so it doesn't feel too instant)
+            if (!isFromMe) {
+              await new Promise(resolve => setTimeout(resolve, 1000)); // 1 second delay for reactions
+            }
+            
+            // Send meme to chat
+            try {
+              await request(`${BRIDGE_URL}/bridge/say-meme`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  chatId,
+                  imageUrl: memeUrl,
+                  text: isFromMe ? "🎨 Moji meme!" : "🎨 Moji reacts!"
+                })
+              });
+              
+              console.log(`[STICKER AUTO] ✅ Sent ${isFromMe ? 'accompanying' : 'reaction'} meme to chat`);
+            } catch (e: any) {
+              console.error("[STICKER AUTO] ❌ Send error:", e);
+            }
+          } else {
+            console.log(`[STICKER AUTO] ❌ Failed to generate meme URL`);
+          }
+        } else if (!stickerDecision.shouldGenerateSticker) {
+          console.log(`[STICKER AUTO] ⏭️  Agent decided not to generate sticker`);
+        } else {
+          console.log(`[STICKER AUTO] ⚠️  Missing prompt or other issue`);
+        }
+      } catch (e) {
+        console.error("[STICKER AUTO] Error:", e);
       }
     })();
     
@@ -459,20 +604,28 @@ fastify.post('/tick', async (req, reply) => {
             const eventId = `voice_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
             
             // If S3 is configured, upload there
-            if (process.env.AWS_BUCKET_NAME) {
-              const s3 = new S3Client({ region: process.env.AWS_REGION || "us-east-1" });
-              const key = `voices/${targetUserId}/${eventId}.mp3`;
-              
-              await s3.send(new PutObjectCommand({
-                Bucket: process.env.AWS_BUCKET_NAME,
-                Key: key,
-                Body: audioBuffer,
-                ContentType: "audio/mpeg",
-              }));
-              
-              audioUrl = `https://${process.env.AWS_BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/${key}`;
-            } else {
-              // Fallback: save to local file for testing
+            if (process.env.AWS_BUCKET_NAME && process.env.AWS_BUCKET_NAME.trim() !== "") {
+              try {
+                const s3 = new S3Client({ region: process.env.AWS_REGION || "us-east-1" });
+                const key = `voices/${targetUserId}/${eventId}.mp3`;
+                
+                await s3.send(new PutObjectCommand({
+                  Bucket: process.env.AWS_BUCKET_NAME,
+                  Key: key,
+                  Body: audioBuffer,
+                  ContentType: "audio/mpeg",
+                }));
+                
+                audioUrl = `https://${process.env.AWS_BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/${key}`;
+                console.log(`[TICK] ✅ Uploaded audio to S3: ${audioUrl}`);
+              } catch (s3Error) {
+                console.error("[TICK] S3 upload failed, falling back to local save:", s3Error);
+                // Fall through to local save
+              }
+            }
+            
+            // Save to local file (always, or as fallback if S3 failed)
+            if (!audioUrl || !audioUrl.startsWith("https://")) {
               const fs = await import("fs/promises");
               const path = await import("path");
               const audioDir = path.join(process.cwd(), "audio");
@@ -482,8 +635,10 @@ fastify.post('/tick', async (req, reply) => {
                 await fs.writeFile(filename, audioBuffer);
                 audioUrl = `file://${filename}`;
                 console.log(`[TICK] ✅ Saved audio to ${filename}`);
+                console.log(`[TICK] Audio file size: ${audioBuffer.length} bytes`);
               } catch (e) {
-                console.error("[TICK] Failed to save audio file:", e);
+                console.error("[TICK] ❌ Failed to save audio file:", e);
+                console.error("[TICK] Error details:", e instanceof Error ? e.stack : e);
                 // Fallback to base64 if file save fails
                 audioUrl = `data:audio/mpeg;base64,${audioBuffer.toString("base64").slice(0, 100)}...`;
               }

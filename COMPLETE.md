@@ -63,8 +63,9 @@
 ### 3. **Meme Engine** ✅
 - Imgflip API integration
 - 100 templates loaded on startup
-- Context-aware caption generation
-- Topic-based template selection
+- **Automatic meme generation** (80% chance for reactions)
+- Context-aware template selection
+- Reacts to latest message only (no conversation history)
 - <1 second generation time
 
 ### 4. **Desktop Pet Client** ✅
@@ -98,7 +99,18 @@
 
 ## 🔄 Complete Workflows
 
-### Workflow 1: Meme Request from Chat
+### Workflow 1: Automatic Meme Generation
+
+```
+1. Friend sends: "I need coffee for studying!"
+2. Bridge → Brain /events/message
+3. Brain → Agent decides to generate meme (80% chance)
+4. Brain → Converts message to meme template + text
+5. Brain → Imgflip generates meme
+6. Brain → Bridge → Posts to group chat automatically
+```
+
+### Workflow 1b: Manual Meme Request
 
 ```
 1. User in group: "@moji meme: finals"

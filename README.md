@@ -163,11 +163,23 @@ Moji will post a contextual meme! 🎉
 @moji meme: stress and deadlines
 ```
 
-### Request Sticker (from iMessage)
+### Automatic Meme Generation
+Moji automatically generates memes based on message context:
+- **80% chance** for reactions to friend messages
+- **70% chance** for accompanying your own messages
+- Uses **Imgflip** for fast meme generation
+- Context-aware template selection (Drake, This is Fine, Distracted Boyfriend, etc.)
+
+**Examples:**
+- "I need coffee!" → Drake meme (Not having coffee / Having coffee 🍕)
+- "Finals tomorrow" → This is Fine meme
+- "I'm so happy!" → Distracted Boyfriend meme
+
+### Request Meme/Sticker (from iMessage)
 ```
+@moji meme: finals stress
+@moji share a meme about coffee
 @moji sticker: a cute cat with big eyes
-@moji make a sticker of a happy friend group
-@moji generate sticker: a stressed student (funny style)
 ```
 
 ### Request Meme (from Desktop)
@@ -230,7 +242,7 @@ const response = runner.run({
 | Pet Brain | Node.js + Fastify + SQLite + **Dedalus Agent** |
 | AI/LLM | **OpenAI GPT-4** or Claude via Dedalus MCP |
 | Meme Engine | Imgflip API |
-| Sticker Generation | OpenAI DALL-E 3 |
+| Sticker/Meme Generation | Imgflip API (automatic) |
 | Voice TTS | ElevenLabs API |
 | Desktop App | Electron + React + Vite |
 | Audio | Web Audio API + MediaRecorder |
@@ -257,12 +269,14 @@ const response = runner.run({
 4. Brain calls Imgflip → generates meme
 5. Bridge posts meme to group chat
 
-### Workflow D: Sticker Request
+### Workflow D: Automatic Meme Generation
 
-1. User types in chat: `@moji sticker: a cute cat`
-2. Bridge detects command → `/events/sticker-request`
-3. Brain calls DALL-E 3 → generates sticker image
-4. Bridge posts sticker to group chat
+1. Friend sends: "I love coffee and studying!"
+2. Bridge → Brain `/events/message`
+3. **Agent decides** to generate meme (80% chance)
+4. Brain converts message to meme template + text
+5. Brain calls Imgflip → generates meme
+6. Bridge posts meme to group chat automatically
 
 ### Workflow C: Share Moment
 

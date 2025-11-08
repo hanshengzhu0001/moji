@@ -7,14 +7,23 @@ build/
 # Environment
 .env
 .env.local
+*.env.local
+*.env.*.local
 
 # Database
 *.db
 *.db-journal
+*.db-shm
+*.db-wal
 
 # Logs
 *.log
 npm-debug.log*
+/tmp/
+
+# Audio files
+*.mp3
+audio/
 
 # IDE
 .vscode/
@@ -29,10 +38,3 @@ Thumbs.db
 # Build
 *.js.map
 *.d.ts
-
-
-
-# Environment variables
-.env
-*.env.local
-*.env.*.local

@@ -18,7 +18,7 @@ Moji is an AI-powered digital pet that seamlessly integrates with iMessage. It t
 - 🎤 **Receiving voice notes** (auto-converts WebM → MP3)
 - 📸 **Sharing images** directly to iMessage
 - 🧠 **Understanding emotions** with intelligent mood classification
-- 🐱🐶🐦 **Responding with animal sounds** - actual meows, barks, and chirps!
+- 🐱🐶🐦 **Responding with animal sounds** - ElevenLabs voice synthesis for natural animal voices
 - 🎭 **Transforming appearance** - Pet morphs into different animals based on mood
 - 🖥️ **Beautiful desktop UI** with real-time voice feedback
 
@@ -62,15 +62,15 @@ Record audio in the browser, automatically convert to MP3, and send to iMessage.
 ### 5. 📸 Image Sharing
 Upload and share images directly to iMessage with drag-and-drop.
 
-### 6. 🐱🐶🐦 Animal Voice Responses
-Pet responds with **actual animal sounds** based on your mood:
+### 6. 🐱🐶🐦 Animal Voice Responses (ElevenLabs)
+Pet responds with **natural animal voices** powered by ElevenLabs text-to-speech, generating realistic animal sounds based on your mood:
 
-| Your Mood | Pet Transforms | Sound | Response |
-|-----------|----------------|-------|----------|
-| **Excited** | 🐱💫 Cat | Meow! | "Yay! That's awesome! 🎉" |
-| **Stressed** | 🐶 Dog | Woof! | "Hang in there! 🐱" |
-| **Sad** | 🐦 Bird | Chirp! | "Sending hugs 🤗" |
-| **Neutral** | 🐱 Cat | Meow! | "Got it!" |
+| Your Mood | Pet Transforms | Voice (ElevenLabs) | Response |
+|-----------|----------------|-------------------|----------|
+| **Excited** | 🐱💫 Cat | Cat voice | "Yay! That's awesome! 🎉" |
+| **Stressed** | 🐶 Dog | Dog voice | "Hang in there! 🐱" |
+| **Sad** | 🐦 Bird | Bird voice | "Sending hugs 🤗" |
+| **Neutral** | 🐱 Cat | Cat voice | "Got it!" |
 
 ### 7. 🎭 Dynamic Pet Transformation
 The pet **morphs into different animals** based on the conversation:
@@ -106,10 +106,11 @@ The pet **morphs into different animals** based on the conversation:
 │  │  • ffmpeg - Audio conversion (WebM → MP3)        │  │
 │  └──────────────────────────────────────────────────┘  │
 │  ┌──────────────────────────────────────────────────┐  │
-│  │  Animal Voice System                              │  │
-│  │  • Cat sounds (meows) - Excited/Neutral          │  │
-│  │  • Dog sounds (barks) - Stressed                 │  │
-│  │  • Bird sounds (chirps) - Sad                    │  │
+│  │  Animal Voice System (ElevenLabs)                │  │
+│  │  • ElevenLabs TTS - Natural animal voices        │  │
+│  │  • Cat voice - Excited/Neutral                   │  │
+│  │  • Dog voice - Stressed                          │  │
+│  │  • Bird voice - Sad                              │  │
 │  └──────────────────────────────────────────────────┘  │
 └────────────────────┬────────────────────────────────────┘
                      │
@@ -169,10 +170,10 @@ TARGET_CHAT_ID=+1234567890  # Your phone number
 IMGFLIP_USERNAME=your_username
 IMGFLIP_PASSWORD=your_password
 
-# Optional: For custom stickers
+# Required for custom stickers
 OPENAI_API_KEY=sk-...
 
-# Optional: For voice synthesis (not required - we use real animal sounds)
+# Required for animal voice synthesis (ElevenLabs)
 ELEVENLABS_API_KEY=...
 ```
 
@@ -232,7 +233,7 @@ moji meme: coffee addiction        # Alternative command
 |------------|---------|-----------------|
 | **Photon AI iMessage Kit** | iMessage integration | Only reliable way to programmatically access iMessage on macOS |
 | **OpenAI DALL-E 3** | Custom sticker generation | Best-in-class image generation for unique, high-quality stickers |
-| **ElevenLabs** | Voice synthesis (optional) | High-quality voice generation for enhanced responses |
+| **ElevenLabs** | Animal voice synthesis | Natural, realistic animal voices (cat, dog, bird) for emotional responses |
 | **Imgflip API** | Meme templates | 100+ popular meme templates, fast and free |
 
 ### Backend & Infrastructure
@@ -274,14 +275,15 @@ moji meme: coffee addiction        # Alternative command
 5. **Imgflip API** creates the meme
 6. **Photon SDK** sends to iMessage
 
-### Voice Response System
+### Voice Response System (ElevenLabs)
 
 1. **Message received** → Mood classified
 2. **Response generated** based on mood
 3. **Animal selected**: Cat (excited), Dog (stressed), Bird (sad)
-4. **Sound file played**: Actual animal recordings
-5. **Pet transforms**: Emoji changes to match animal
-6. **UI updates**: Speech bubble + sound + animation
+4. **ElevenLabs TTS generates** natural animal voice audio
+5. **Audio played** in desktop UI
+6. **Pet transforms**: Emoji changes to match animal
+7. **UI updates**: Speech bubble + sound + animation
 
 ---
 
@@ -307,18 +309,18 @@ moji meme: coffee addiction        # Alternative command
 @moji send sticker
 @moji sticker: cute cat studying
 
-# In Desktop UI
-Talk to Moji: "I'm so excited!"  → 🐱💫 Meow!
-Talk to Moji: "I'm stressed"     → 🐶 Woof!
-Talk to Moji: "I'm feeling sad"  → 🐦 Chirp!
+# In Desktop UI (ElevenLabs voices)
+Talk to Moji: "I'm so excited!"  → 🐱💫 Cat voice (ElevenLabs)
+Talk to Moji: "I'm stressed"     → 🐶 Dog voice (ElevenLabs)
+Talk to Moji: "I'm feeling sad"  → 🐦 Bird voice (ElevenLabs)
 ```
 
 ### What Makes Moji Special
 
 1. **Photon AI** - Solved the "impossible" iMessage integration
-2. **Intelligent Mood Detection** - Pattern-based emotion understanding
-3. **Animal Transformation** - Pet morphs based on your emotions
-4. **Real Animal Sounds** - Actual meows, barks, and chirps
+2. **ElevenLabs Voice Synthesis** - Natural animal voices that respond to your emotions
+3. **Intelligent Mood Detection** - Pattern-based emotion understanding
+4. **Animal Transformation** - Pet morphs based on your emotions
 5. **Complete UX** - Voice + text + visual feedback
 
 ---
@@ -388,7 +390,7 @@ MIT License - see LICENSE file for details
 
 - **Photon AI** - Made iMessage integration possible
 - **OpenAI** - DALL-E 3 for custom sticker generation
-- **ElevenLabs** - Voice synthesis capabilities
+- **ElevenLabs** - Natural animal voice synthesis (cat, dog, bird voices)
 - **Imgflip** - Extensive meme template library
 
 ### Built At
@@ -442,9 +444,9 @@ Open http://localhost:5173 and start chatting with your AI pet!
 ## 💡 What Makes Moji Unique
 
 1. **Multi-API Orchestration** - 4 AI services working together seamlessly
-2. **Emotional Intelligence** - Understands and responds to your feelings
-3. **Animal Transformation** - Pet morphs based on context (cat/dog/bird)
-4. **Real Animal Sounds** - Actual meows, barks, and chirps
+2. **ElevenLabs Voice Synthesis** - Natural animal voices generated on-demand
+3. **Emotional Intelligence** - Understands and responds to your feelings
+4. **Animal Transformation** - Pet morphs based on context (cat/dog/bird)
 5. **Complete Product** - Not just a demo, but a working system
 6. **Beautiful UX** - Voice + text + visual + animation feedback
 

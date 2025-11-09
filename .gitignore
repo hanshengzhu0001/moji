@@ -20,14 +20,20 @@ package-lock.json
 npm-debug.log*
 /tmp/
 
-# Audio files
-*.mp3
-audio/
+# Audio files (but keep test files)
 test-*.mp3
 
 # Test files
 test-*.ts
 test-*.txt
+
+# Uploads
+uploads/
+*.webm
+*.caf
+
+# Temporary files
+*.tmp
 
 # Build outputs
 dist/

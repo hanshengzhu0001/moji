@@ -95,16 +95,17 @@ class DedalusAgent {
   private classifyMood(context: { messages: string[] }): AgentResponse {
     const text = context.messages.join(" ").toLowerCase();
     
+    // Check for sad first (before stressed, since "sad" is more specific)
+    if (/(sad|down|depressed|unhappy|upset|feeling.*sad|really.*sad)/.test(text)) {
+      return { mood: "sad" };
+    }
     if (/(stress|anxious|worried|nervous|overwhelmed|panic)/.test(text)) {
       return { mood: "stressed" };
     }
-    if (/(sad|down|depressed|unhappy|upset)/.test(text)) {
-      return { mood: "sad" };
-    }
-    if (/(happy|great|awesome|amazing|love|excited)/.test(text)) {
+    if (/(happy|great|awesome|amazing|love)/.test(text)) {
       return { mood: "happy" };
     }
-    if (/(hyped|pumped|can'?t wait|let'?s go)/.test(text)) {
+    if (/(excited|hyped|pumped|can'?t wait|let'?s go)/.test(text)) {
       return { mood: "excited" };
     }
     
@@ -164,19 +165,16 @@ class DedalusAgent {
   
   private decideSticker(context: {
     messageText: string;
-    isFromMe: boolean;
     userId: string;
     userMood: string;
-    // recentMessages removed - only react to latest message
   }): AgentResponse {
     const text = context.messageText.toLowerCase();
-    const isFromMe = context.isFromMe;
     const userMood = context.userMood;
     
-    // Generate stickers with higher probability for testing (80% for reactions, 70% for accompanying)
-    // TODO: Lower these back to 0.3/0.2 for production if too frequent
+    // Generate stickers with higher probability for testing (80%)
+    // TODO: Lower this back to 0.3 for production if too frequent
     const random = Math.random();
-    const threshold = isFromMe ? 0.7 : 0.8; // Higher chance to see stickers in action
+    const threshold = 0.8;
     
     console.log(`[STICKER DECISION] Random: ${random.toFixed(2)}, Threshold: ${threshold}, Will generate: ${random <= threshold}`);
     
@@ -185,85 +183,53 @@ class DedalusAgent {
       return { shouldGenerateSticker: false };
     }
     
-    console.log(`[STICKER DECISION] ✅ Will generate sticker!`);
+    console.log(`[STICKER DECISION] ✅ Will generate reaction sticker!`);
     
     // Extract key words and emotions from message
     let stickerPrompt = "";
     let stickerStyle: "cute" | "funny" | "sad" | "excited" = "cute";
     
-    // For reactions (messages from others)
-    if (!isFromMe) {
-      // Happy/excited reactions
-      if (/(happy|great|awesome|amazing|love|excited|yay|woo|yes|celebrate)/.test(text)) {
-        stickerPrompt = "celebrating";
-        stickerStyle = "excited";
-      }
-      // Stressed/sad reactions
-      else if (/(stress|anxious|worried|nervous|overwhelmed|panic|sad|down|depressed)/.test(text)) {
-        stickerPrompt = "supportive";
-        stickerStyle = "sad";
-      }
-      // Funny/silly reactions
-      else if (/(lol|lmao|haha|funny|joke|hilarious|silly)/.test(text)) {
-        stickerPrompt = "laughing";
-        stickerStyle = "funny";
-      }
-      // Food-related
-      else if (/(food|eat|hungry|pizza|coffee|breakfast|lunch|dinner|snack)/.test(text)) {
-        stickerPrompt = "food";
-        stickerStyle = "funny";
-      }
-      // Study/work related
-      else if (/(study|work|homework|project|exam|test|final|deadline)/.test(text)) {
-        stickerPrompt = "studying";
-        stickerStyle = "cute";
-      }
-      // Sleep/tired
-      else if (/(sleep|tired|bed|nap|rest|exhausted)/.test(text)) {
-        stickerPrompt = "sleepy";
-        stickerStyle = "cute";
-      }
-      // Default: extract main topic
-      else {
-        // Try to extract nouns or key phrases
-        const words = text.split(/\s+/).filter(w => w.length > 3);
-        if (words.length > 0) {
-          stickerPrompt = words[0];
-        } else {
-          stickerPrompt = "reacting";
-        }
-        stickerStyle = "cute";
-      }
+    // React to friend's message
+    // Happy/excited reactions
+    if (/(happy|great|awesome|amazing|love|excited|yay|woo|yes|celebrate)/.test(text)) {
+      stickerPrompt = "celebrating";
+      stickerStyle = "excited";
     }
-    // For accompanying stickers (user's own messages)
+    // Stressed/sad reactions
+    else if (/(stress|anxious|worried|nervous|overwhelmed|panic|sad|down|depressed)/.test(text)) {
+      stickerPrompt = "supportive";
+      stickerStyle = "sad";
+    }
+    // Funny/silly reactions
+    else if (/(lol|lmao|haha|funny|joke|hilarious|silly)/.test(text)) {
+      stickerPrompt = "laughing";
+      stickerStyle = "funny";
+    }
+    // Food-related
+    else if (/(food|eat|hungry|pizza|coffee|breakfast|lunch|dinner|snack)/.test(text)) {
+      stickerPrompt = "food";
+      stickerStyle = "funny";
+    }
+    // Study/work related
+    else if (/(study|work|homework|project|exam|test|final|deadline)/.test(text)) {
+      stickerPrompt = "studying";
+      stickerStyle = "cute";
+    }
+    // Sleep/tired
+    else if (/(sleep|tired|bed|nap|rest|exhausted)/.test(text)) {
+      stickerPrompt = "sleepy";
+      stickerStyle = "cute";
+    }
+    // Default: extract main topic
     else {
-      // Enhance user's message with a complementary meme
-      if (/(happy|great|awesome|amazing|love|excited|yay|woo|yes)/.test(text)) {
-        stickerPrompt = "celebrating";
-        stickerStyle = "excited";
+      // Try to extract nouns or key phrases
+      const words = text.split(/\s+/).filter(w => w.length > 3);
+      if (words.length > 0) {
+        stickerPrompt = words[0];
+      } else {
+        stickerPrompt = "reacting";
       }
-      else if (/(stress|anxious|worried|nervous|overwhelmed)/.test(text)) {
-        stickerPrompt = "stressed";
-        stickerStyle = "sad";
-      }
-      else if (/(food|eat|hungry|pizza|coffee)/.test(text)) {
-        stickerPrompt = "food";
-        stickerStyle = "funny";
-      }
-      else if (/(study|work|homework|project|exam)/.test(text)) {
-        stickerPrompt = "studying";
-        stickerStyle = "cute";
-      }
-      else {
-        // Extract main topic from user's message
-        const words = text.split(/\s+/).filter(w => w.length > 3 && !/(the|and|but|for|are|with)/.test(w));
-        if (words.length > 0) {
-          stickerPrompt = words[0];
-        } else {
-          stickerPrompt = "reacting";
-        }
-        stickerStyle = "cute";
-      }
+      stickerStyle = "cute";
     }
     
     // Adjust style based on user mood if available

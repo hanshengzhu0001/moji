@@ -18,9 +18,22 @@ const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 
 const fastify = Fastify({ logger: true });
 await fastify.register(cors, { origin: true });
+await fastify.register(import('@fastify/static'), {
+  root: import.meta.dir + '/../audio',
+  prefix: '/audio/',
+});
+await fastify.register(import('@fastify/multipart'), {
+  limits: {
+    fileSize: 10 * 1024 * 1024, // 10MB max
+  }
+});
 
 // SQLite database
 const db = new Database("nori.db");
+
+// Track which messages have already generated stickers (prevent duplicates)
+// Key: `${chatId}:${userId}:${text}:${ts}` or `${chatId}:${userId}:${text}`
+const stickerGenerated = new Set<string>();
 
 // Initialize database schema
 db.exec(`
@@ -107,13 +120,13 @@ stmt.run("main", process.env.TARGET_CHAT_ID || "default", "chill", 0, 1);
 
 // API Endpoints
 
-// Receive messages from iMessage
-fastify.post<{ Body: { chatId: string; userId: string; text: string; ts: string; isFromMe?: boolean } }>(
+// Receive messages from iMessage (only from friends, not self-sent)
+fastify.post<{ Body: { chatId: string; userId: string; text: string; ts: string } }>(
   '/events/message',
   async (req, reply) => {
-    const { chatId, userId, text, ts, isFromMe = false } = req.body;
+    const { chatId, userId, text, ts } = req.body;
     
-    // Skip empty messages (they won't generate good stickers)
+    // Skip empty messages
     if (!text || text.trim().length === 0) {
       return { success: true, skipped: true, reason: "empty_message" };
     }
@@ -164,48 +177,90 @@ fastify.post<{ Body: { chatId: string; userId: string; text: string; ts: string;
           db.prepare("UPDATE users SET lastMood = ? WHERE userId = ?")
             .run(agentResponse.mood, userId);
           console.log(`[MOOD] ${userId.slice(0, 15)} → ${agentResponse.mood}`);
+          
+          // Generate voice response based on mood
+          const responses: Record<string, string[]> = {
+            excited: ["Yay! That's awesome! 🎉", "So exciting!", "Love the energy!"],
+            stressed: ["Hang in there! 🐱", "You got this!", "Take a deep breath"],
+            sad: ["Sending hugs 🤗", "I'm here for you", "It'll be okay"],
+            neutral: ["Got it!", "Interesting!", "Cool!"]
+          };
+          
+          const moodResponses = responses[agentResponse.mood] || responses.neutral;
+          const responseText = moodResponses[Math.floor(Math.random() * moodResponses.length)];
+          
+          // Determine voice kind based on mood
+          const voiceKind = agentResponse.mood === 'excited' ? 'cat' : 
+                           agentResponse.mood === 'stressed' ? 'dog' :
+                           agentResponse.mood === 'sad' ? 'bird' : 'cat';
+          const voiceDuration = text.length > 50 ? 'long' : text.length > 20 ? 'medium' : 'short';
+          
+          // Save utterance for UI to pick up
+          db.prepare(`
+            INSERT OR REPLACE INTO utterances (userId, text, voiceKind, voiceDurationHint, ts)
+            VALUES (?, ?, ?, ?, ?)
+          `).run(userId, responseText, voiceKind, voiceDuration, new Date().toISOString());
+          
+          console.log(`[VOICE] Generated response for ${userId.slice(0, 15)}: "${responseText}" (${voiceKind}, ${voiceDuration})`);
         }
       } catch (e) {
         console.error("[MOOD] Classification error:", e);
       }
     })();
     
-    // Automatic sticker generation based on latest message only (async, don't block)
+    // DISABLED: Automatic sticker generation
+    // Use @moji send sticker command instead for manual control
+    if (false) {
     (async () => {
       try {
-        // Get user mood (but don't use message history for sticker generation)
+        // Create a unique key for this message to prevent duplicate sticker generation
+        // Use text + timestamp for uniqueness (since same text can be sent multiple times)
+        const messageKey = `${chatId}:${userId}:${text}:${ts}`;
+        const messageKeyNoTs = `${chatId}:${userId}:${text}`; // Fallback key without timestamp
+        
+        // Check if we've already generated a sticker for this message
+        if (stickerGenerated.has(messageKey) || stickerGenerated.has(messageKeyNoTs)) {
+          console.log(`[STICKER AUTO] ⏭️  Skipping duplicate message (already generated sticker): "${text.slice(0, 50)}${text.length > 50 ? '...' : ''}"`);
+          return;
+        }
+        
+        // Skip if message is too short (likely not substantive - "hi", "ok", emojis, etc.)
+        if (text.length < 3) {
+          console.log(`[STICKER AUTO] ⏭️  Skipping short message (${text.length} chars): "${text}"`);
+          return;
+        }
+        
+        // Get user mood for context
         const user: any = db.prepare("SELECT * FROM users WHERE userId = ?").get(userId);
         const userMood = user?.lastMood || "neutral";
         
-        // Call agent to decide if we should generate a sticker
-        // Only react to the latest message, no context from other messages
+        console.log(`[STICKER AUTO] Evaluating message (${text.length} chars) from FRIEND: "${text.slice(0, 50)}${text.length > 50 ? '...' : ''}"`);
+        
+        // Call agent to decide if we should generate a reaction sticker
         const stickerDecision = await agent.callAgent("sticker_decision", {
           messageText: text,
-          isFromMe, // true if message is from the user themselves
           userId,
           userMood
-          // Removed recentMessages - only react to current message
         });
         
         // Generate meme/sticker using Imgflip if agent recommends it
-        console.log(`[STICKER AUTO] Decision: shouldGenerate=${stickerDecision.shouldGenerateSticker}, prompt="${stickerDecision.stickerPrompt}"`);
+        console.log(`[STICKER AUTO] Decision: shouldGenerate=${stickerDecision.shouldGenerateSticker}, prompt="${stickerDecision.stickerPrompt}", style="${stickerDecision.stickerStyle}"`);
         
         if (stickerDecision.shouldGenerateSticker && stickerDecision.stickerPrompt) {
           const stickerStyle = stickerDecision.stickerStyle || "cute";
           const stickerPrompt = stickerDecision.stickerPrompt;
           
-          console.log(`[STICKER AUTO] 🎨 Generating ${isFromMe ? 'accompanying' : 'reaction'} meme: "${stickerPrompt}" (${stickerStyle})`);
+          console.log(`[STICKER AUTO] 🎨 Generating reaction meme: "${stickerPrompt}" (${stickerStyle})`);
           
           // Convert sticker prompt/style into meme template and text
-          // Select appropriate meme template based on style and prompt
           let templateHint = "drake"; // default
           let topText = "";
           let bottomText = "";
           
-          // Clean up the prompt (remove "a " prefix if present)
+          // Clean up the prompt
           const cleanPrompt = stickerPrompt.replace(/^a /, "").replace(/ with .*$/, "").replace(/ animal.*$/, "");
           
-          // Map sticker styles and prompts to meme templates
+          // Map sticker styles and prompts to meme templates (reactions only)
           if (stickerStyle === "funny" || stickerPrompt.includes("laughing") || stickerPrompt.includes("funny")) {
             templateHint = "drake hotline bling";
             topText = "Not reacting";
@@ -231,7 +286,7 @@ fastify.post<{ Body: { chatId: string; userId: string; text: string; ts: string;
             topText = text.slice(0, 40) || "Being awake";
             bottomText = "Sleeping 😴";
           } else {
-            // Cute/default - use drake
+            // Default - use drake
             templateHint = "drake hotline bling";
             topText = text.slice(0, 40) || "Not " + cleanPrompt;
             bottomText = cleanPrompt.charAt(0).toUpperCase() + cleanPrompt.slice(1);
@@ -241,7 +296,7 @@ fastify.post<{ Body: { chatId: string; userId: string; text: string; ts: string;
           const template = findTemplate(templateHint) || Object.values(MEME_CATALOG)[0];
           
           if (!template) {
-            console.log(`[STICKER AUTO] ❌ No meme template found`);
+            console.log(`[STICKER AUTO] ❌ No meme template found for "${templateHint}"`);
             return;
           }
           
@@ -254,25 +309,38 @@ fastify.post<{ Body: { chatId: string; userId: string; text: string; ts: string;
             console.log(`[STICKER AUTO] ✅ Generated meme URL: ${memeUrl}`);
             
             // Add a small delay for reactions (so it doesn't feel too instant)
+            // No delay for accompanying messages (user's own messages)
             if (!isFromMe) {
-              await new Promise(resolve => setTimeout(resolve, 1000)); // 1 second delay for reactions
+              const delay = 1000 + Math.random() * 1000; // 1-2 seconds for reactions
+              console.log(`[STICKER AUTO] ⏱️  Adding ${Math.round(delay)}ms delay for reaction`);
+              await new Promise(resolve => setTimeout(resolve, delay));
             }
             
             // Send meme to chat
             try {
-              await request(`${BRIDGE_URL}/bridge/say-meme`, {
+              await request(`${BRIDGE_URL}/send`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                   chatId,
-                  imageUrl: memeUrl,
-                  text: isFromMe ? "🎨 Moji meme!" : "🎨 Moji reacts!"
+                  imageUrl: memeUrl
                 })
               });
               
-              console.log(`[STICKER AUTO] ✅ Sent ${isFromMe ? 'accompanying' : 'reaction'} meme to chat`);
+              // Mark this message as having generated a sticker (prevent duplicates)
+              stickerGenerated.add(messageKey);
+              stickerGenerated.add(messageKeyNoTs);
+              
+              // Clean up old entries (keep only last 50 to prevent memory leak)
+              if (stickerGenerated.size > 100) {
+                const entries = Array.from(stickerGenerated);
+                stickerGenerated.clear();
+                entries.slice(-50).forEach(key => stickerGenerated.add(key));
+              }
+              
+              console.log(`[STICKER AUTO] ✅ Sent reaction meme to chat`);
             } catch (e: any) {
-              console.error("[STICKER AUTO] ❌ Send error:", e);
+              console.error("[STICKER AUTO] ❌ Send error:", e.message || e);
             }
           } else {
             console.log(`[STICKER AUTO] ❌ Failed to generate meme URL`);
@@ -282,10 +350,14 @@ fastify.post<{ Body: { chatId: string; userId: string; text: string; ts: string;
         } else {
           console.log(`[STICKER AUTO] ⚠️  Missing prompt or other issue`);
         }
-      } catch (e) {
-        console.error("[STICKER AUTO] Error:", e);
+      } catch (e: any) {
+        console.error("[STICKER AUTO] Error:", e.message || e);
+        if (e.stack) {
+          console.error("[STICKER AUTO] Stack:", e.stack);
+        }
       }
     })();
+    }
     
     console.log(`[MSG] ${userId.slice(0, 15)}: ${text.slice(0, 50)}`);
     
@@ -329,13 +401,12 @@ fastify.post<{ Body: { chatId: string; userId: string; topic: string } }>(
     if (memeUrl) {
       // Send to chat via bridge
       try {
-        await request(`${BRIDGE_URL}/bridge/say-meme`, {
+        await request(`${BRIDGE_URL}/send`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             chatId,
-            imageUrl: memeUrl,
-            text: "🐱 Moji meme drop!"
+            imageUrl: memeUrl
           })
         });
         
@@ -365,13 +436,12 @@ fastify.post<{ Body: { chatId: string; userId: string; prompt: string; style?: s
     if (stickerUrl) {
       // Send to chat via bridge
       try {
-        await request(`${BRIDGE_URL}/bridge/say-meme`, {
+        await request(`${BRIDGE_URL}/send`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             chatId,
-            imageUrl: stickerUrl,
-            text: "🎨 Moji sticker!"
+            imageUrl: stickerUrl
           })
         });
         
@@ -387,7 +457,257 @@ fastify.post<{ Body: { chatId: string; userId: string; prompt: string; style?: s
   }
 );
 
-// Share audio/image moment
+// Manual sticker generation - react to the latest message
+fastify.post<{ Body: { chatId: string; userId: string } }>(
+  '/events/send-sticker',
+  async (req, reply) => {
+    const { chatId, userId } = req.body;
+    
+    console.log(`[SEND STICKER] Manual request from ${userId}`);
+    
+    // Get the most recent message (not including the @moji send sticker command)
+    const recentMessages: any[] = db.prepare(
+      "SELECT text, userId FROM messages WHERE chatId = ? ORDER BY ts DESC LIMIT 2"
+    ).all(chatId);
+    
+    // Get the previous message (skip the @moji send sticker command)
+    const targetMessage = recentMessages.find(m => !/@moji\s+send\s+sticker/i.test(m.text));
+    
+    if (!targetMessage || !targetMessage.text) {
+      console.log(`[SEND STICKER] No previous message found to react to`);
+      return { success: false, error: "No message to react to" };
+    }
+    
+    console.log(`[SEND STICKER] Reacting to: "${targetMessage.text.slice(0, 50)}..."`);
+    
+    // Get user mood for context
+    const user: any = db.prepare("SELECT * FROM users WHERE userId = ?").get(targetMessage.userId);
+    const userMood = user?.lastMood || "neutral";
+    
+    // Call agent to decide sticker
+    const stickerDecision = await agent.callAgent("sticker_decision", {
+      messageText: targetMessage.text,
+      userId: targetMessage.userId,
+      userMood
+    });
+    
+    if (!stickerDecision.shouldGenerateSticker || !stickerDecision.stickerPrompt) {
+      console.log(`[SEND STICKER] Agent decided not to generate sticker`);
+      return { success: false, error: "Agent declined" };
+    }
+    
+    const stickerStyle = stickerDecision.stickerStyle || "cute";
+    const stickerPrompt = stickerDecision.stickerPrompt;
+    const text = targetMessage.text;
+    
+    console.log(`[SEND STICKER] 🎨 Generating: "${stickerPrompt}" (${stickerStyle})`);
+    
+    // Convert to meme template
+    let templateHint = "drake";
+    let topText = "";
+    let bottomText = "";
+    
+    const cleanPrompt = stickerPrompt.replace(/^a /, "").replace(/ with .*$/, "").replace(/ animal.*$/, "");
+    
+    if (stickerStyle === "funny" || stickerPrompt.includes("laughing")) {
+      templateHint = "drake hotline bling";
+      topText = "Not reacting";
+      bottomText = cleanPrompt.charAt(0).toUpperCase() + cleanPrompt.slice(1);
+    } else if (stickerStyle === "excited" || stickerPrompt.includes("celebrating")) {
+      templateHint = "distracted boyfriend";
+      topText = text.slice(0, 40) || "Normal messages";
+      bottomText = cleanPrompt.charAt(0).toUpperCase() + cleanPrompt.slice(1) + "! 🎉";
+    } else if (stickerStyle === "sad" || stickerPrompt.includes("stressed")) {
+      templateHint = "this is fine";
+      topText = text.slice(0, 40) || "Everything";
+      bottomText = "This is fine";
+    } else {
+      templateHint = "drake hotline bling";
+      topText = text.slice(0, 40) || "Not " + cleanPrompt;
+      bottomText = cleanPrompt.charAt(0).toUpperCase() + cleanPrompt.slice(1);
+    }
+    
+    const template = findTemplate(templateHint) || Object.values(MEME_CATALOG)[0];
+    
+    if (!template) {
+      console.log(`[SEND STICKER] ❌ No meme template found`);
+      return { success: false, error: "No template" };
+    }
+    
+    const memeUrl = await captionMeme(template.id, topText, bottomText);
+    
+    if (memeUrl) {
+      try {
+        await request(`${BRIDGE_URL}/send`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            chatId,
+            imageUrl: memeUrl
+          })
+        });
+        
+        console.log(`[SEND STICKER] ✅ Sent reaction meme`);
+        return { success: true, memeUrl };
+      } catch (e: any) {
+        console.error("[SEND STICKER] Send error:", e.message || e);
+        return { success: false, error: e.message };
+      }
+    }
+    
+    return { success: false, error: "Generation failed" };
+  }
+);
+
+// Upload and send audio to iMessage
+fastify.post('/upload/audio', async (req, reply) => {
+  try {
+    const data = await req.file();
+    if (!data) {
+      return reply.status(400).send({ error: 'No file uploaded' });
+    }
+
+    const buffer = await data.toBuffer();
+    const webmFilename = `audio_${Date.now()}.webm`;
+    const webmPath = `${import.meta.dir}/../uploads/${webmFilename}`;
+    
+    // Get chat ID and user ID from query or use defaults
+    const chatId = (req.query as any).chatId || process.env.TARGET_CHAT_ID;
+    const userId = (req.query as any).userId || process.env.USER_PHONE;
+    
+    // Save WebM first
+    await Bun.write(webmPath, buffer);
+    
+    // Convert to MP3 using ffmpeg
+    const mp3Filename = webmFilename.replace('.webm', '.mp3');
+    const mp3Path = `${import.meta.dir}/../uploads/${mp3Filename}`;
+    
+    let filepath = webmPath; // Default to WebM
+    let filename = webmFilename;
+    
+    console.log(`[UPLOAD AUDIO] Converting ${webmFilename} to MP3...`);
+    
+    try {
+      // Use ffmpeg to convert WebM to MP3
+      const proc = Bun.spawn(['ffmpeg', '-i', webmPath, '-codec:a', 'libmp3lame', '-qscale:a', '2', mp3Path], {
+        stdout: 'pipe',
+        stderr: 'pipe'
+      });
+      
+      await proc.exited;
+      
+      // Get MP3 file size
+      const mp3File = Bun.file(mp3Path);
+      const mp3Size = await mp3File.size;
+      const sizeKB = Math.max(1, Math.round(mp3Size / 1024));
+      const duration = Math.round(buffer.length / 16000); // Rough estimate
+      
+      console.log(`[UPLOAD AUDIO] Converted to ${mp3Filename} (${sizeKB}KB)`);
+      console.log(`[UPLOAD AUDIO] Sending MP3 to iMessage...`);
+      
+      // Send MP3 file to iMessage via bridge
+      await request(`${BRIDGE_URL}/send`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          chatId,
+          filePath: mp3Path,
+          text: `🎤 Audio (${sizeKB}KB, ~${duration}s)`
+        })
+      });
+      
+      // Clean up WebM file (optional)
+      // await Bun.write(webmPath, '');
+      
+      // Use MP3 path for moment storage
+      filepath = mp3Path;
+      filename = mp3Filename;
+    } catch (conversionError: any) {
+      console.error(`[UPLOAD AUDIO] Conversion failed: ${conversionError.message}`);
+      console.log(`[UPLOAD AUDIO] Falling back to WebM...`);
+      
+      // Fall back to WebM if conversion fails
+      const sizeKB = Math.max(1, Math.round(buffer.length / 1024));
+      const duration = Math.round(buffer.length / 16000);
+      
+      await request(`${BRIDGE_URL}/send`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          chatId,
+          filePath: webmPath,
+          text: `🎤 Audio WebM (${sizeKB}KB, ~${duration}s)`
+        })
+      });
+      
+      // filepath already set to webmPath above
+    }
+    
+    // Save as moment
+    const eventId = `evt_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+    db.prepare(`
+      INSERT INTO moments (eventId, groupId, userId, type, s3Url, durationSec, shortDesc, ts, shareable)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(eventId, "main", userId, 'audio', filepath, 10, 'Voice note from desktop', new Date().toISOString(), 1);
+    
+    console.log(`[UPLOAD AUDIO] ✅ Sent notification to iMessage`);
+    
+    return { success: true, filename, eventId, message: 'Audio saved and notification sent' };
+  } catch (e: any) {
+    console.error('[UPLOAD AUDIO] Error:', e);
+    return reply.status(500).send({ error: e.message });
+  }
+});
+
+// Upload and send image to iMessage
+fastify.post('/upload/image', async (req, reply) => {
+  try {
+    const data = await req.file();
+    if (!data) {
+      return reply.status(400).send({ error: 'No file uploaded' });
+    }
+
+    const buffer = await data.toBuffer();
+    const ext = data.mimetype.split('/')[1] || 'jpg';
+    const filename = `image_${Date.now()}.${ext}`;
+    const filepath = `${import.meta.dir}/../uploads/${filename}`;
+    
+    // Create uploads directory if it doesn't exist
+    await Bun.write(filepath, buffer);
+    
+    // Get chat ID from query or use default
+    const chatId = (req.query as any).chatId || process.env.TARGET_CHAT_ID;
+    const userId = (req.query as any).userId || process.env.USER_PHONE;
+    
+    console.log(`[UPLOAD IMAGE] Saved ${filename}, sending to iMessage...`);
+    
+    // Send image file to iMessage via bridge
+    await request(`${BRIDGE_URL}/send`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        chatId,
+        filePath: filepath
+      })
+    });
+    
+    // Save as moment
+    const eventId = `evt_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+    db.prepare(`
+      INSERT INTO moments (eventId, groupId, userId, type, s3Url, durationSec, shortDesc, ts, shareable)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(eventId, "main", userId, 'image', filepath, null, 'Image from desktop', new Date().toISOString(), 1);
+    
+    console.log(`[UPLOAD IMAGE] ✅ Sent to iMessage`);
+    
+    return { success: true, filename, eventId, filepath };
+  } catch (e: any) {
+    console.error('[UPLOAD IMAGE] Error:', e);
+    return reply.status(500).send({ error: e.message });
+  }
+});
+
+// Share audio/image moment (legacy endpoint, now just saves to DB)
 fastify.post<{ Body: { userId: string; type: string; s3Url: string; durationSec?: number; shortDesc: string } }>(
   '/events/shareable',
   async (req, reply) => {
@@ -412,8 +732,12 @@ fastify.get<{ Querystring: { userId: string } }>(
   async (req, reply) => {
     const { userId } = req.query;
     
+    console.log(`[PET STATE] Request for userId: "${userId}"`);
+    
     const group: any = db.prepare("SELECT * FROM groups WHERE groupId = ?").get("main");
     const utterance: any = db.prepare("SELECT * FROM utterances WHERE userId = ?").get(userId);
+    
+    console.log(`[PET STATE] Utterance found:`, utterance ? `"${utterance.text}"` : 'null');
     
     let lastUtterance = null;
     if (utterance) {
@@ -426,11 +750,15 @@ fastify.get<{ Querystring: { userId: string } }>(
       };
     }
     
-    return {
+    const response = {
       petMood: group?.petMood || "chill",
       headline: getPetHeadline(group?.petMood),
       lastUtterance
     };
+    
+    console.log(`[PET STATE] Returning:`, JSON.stringify(response, null, 2));
+    
+    return response;
   }
 );
 

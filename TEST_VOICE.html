@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Test Voice Playback</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      padding: 40px;
+      background: #f5f5f5;
+    }
+    button {
+      background: #667eea;
+      color: white;
+      border: none;
+      padding: 15px 30px;
+      margin: 10px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 16px;
+    }
+    button:hover {
+      background: #5568d3;
+    }
+    .status {
+      margin-top: 20px;
+      padding: 15px;
+      background: white;
+      border-radius: 8px;
+      font-family: monospace;
+    }
+  </style>
+</head>
+<body>
+  <h1>🎵 Voice Playback Test</h1>
+  
+  <h3>Test Animal Voices:</h3>
+  <button onclick="playVoice('cat', 'short')">🐱 Cat Short</button>
+  <button onclick="playVoice('cat', 'medium')">🐱 Cat Medium</button>
+  <button onclick="playVoice('cat', 'long')">🐱 Cat Long</button>
+  <br>
+  <button onclick="playVoice('dog', 'short')">🐶 Dog Short</button>
+  <button onclick="playVoice('dog', 'medium')">🐶 Dog Medium</button>
+  <button onclick="playVoice('dog', 'long')">🐶 Dog Long</button>
+  <br>
+  <button onclick="playVoice('bird', 'short')">🐦 Bird Short</button>
+  <button onclick="playVoice('bird', 'medium')">🐦 Bird Medium</button>
+  <button onclick="playVoice('bird', 'long')">🐦 Bird Long</button>
+  
+  <h3>Test Pet State API:</h3>
+  <button onclick="testPetState()">📡 Fetch Pet State</button>
+  
+  <div class="status" id="status">
+    Click a button to test...
+  </div>
+  
+  <audio id="audioPlayer"></audio>
+  
+  <script>
+    const BRAIN_URL = 'http://localhost:3001';
+    const USER_ID = '+14458005280';
+    
+    function log(msg) {
+      const status = document.getElementById('status');
+      status.innerHTML += msg + '<br>';
+      console.log(msg);
+    }
+    
+    function playVoice(kind, duration) {
+      const audioPath = `${BRAIN_URL}/audio/${kind}_${duration}.mp3`;
+      log(`[VOICE] Playing: ${audioPath}`);
+      
+      const audio = document.getElementById('audioPlayer');
+      audio.src = audioPath;
+      audio.play()
+        .then(() => log(`[VOICE] ✅ Playing ${kind}_${duration}`))
+        .catch(e => log(`[VOICE] ❌ Error: ${e.message}`));
+    }
+    
+    async function testPetState() {
+      try {
+        log('[API] Fetching pet state...');
+        const res = await fetch(`${BRAIN_URL}/pet/state?userId=${encodeURIComponent(USER_ID)}`);
+        const data = await res.json();
+        log('[API] ✅ Pet state received:');
+        log(JSON.stringify(data, null, 2));
+        
+        if (data.lastUtterance) {
+          log(`[UTTERANCE] Text: "${data.lastUtterance.text}"`);
+          log(`[UTTERANCE] Voice: ${data.lastUtterance.voiceKind}_${data.lastUtterance.voiceDurationHint}`);
+          
+          // Auto-play the voice
+          playVoice(data.lastUtterance.voiceKind, data.lastUtterance.voiceDurationHint);
+        }
+      } catch (e) {
+        log(`[API] ❌ Error: ${e.message}`);
+      }
+    }
+  </script>
+</body>
+</html>
+

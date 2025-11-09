@@ -1,48 +1,76 @@
 .app {
   width: 100%;
-  height: 100vh;
+  min-height: 100vh;
   display: flex;
   flex-direction: column;
   align-items: center;
-  background: rgba(255, 255, 255, 0.95);
-  border-radius: 20px;
-  padding: 20px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  padding: 40px 20px;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
 }
 
+/* Pet at center */
 .pet-container {
   position: relative;
-  margin: 20px 0;
+  margin: 20px 0 40px 0;
   text-align: center;
 }
 
 .pet-sprite {
-  font-size: 80px;
+  font-size: 120px;
   animation: float 3s ease-in-out infinite;
   cursor: pointer;
+  filter: drop-shadow(0 10px 20px rgba(0, 0, 0, 0.2));
+  transition: transform 0.3s;
+}
+
+.pet-sprite:hover {
+  transform: scale(1.1);
+}
+
+.pet-sprite.speaking {
+  animation: float 3s ease-in-out infinite, bounce 0.5s ease-in-out infinite;
 }
 
 @keyframes float {
   0%, 100% { transform: translateY(0px); }
-  50% { transform: translateY(-10px); }
+  50% { transform: translateY(-15px); }
+}
+
+@keyframes bounce {
+  0%, 100% { transform: scale(1) translateY(0); }
+  50% { transform: scale(1.05) translateY(-5px); }
+}
+
+.sound-indicator {
+  display: inline-block;
+  animation: pulse 1s infinite;
 }
 
 .pet-headline {
-  margin-top: 10px;
-  font-size: 14px;
-  color: #666;
+  margin-top: 15px;
+  font-size: 16px;
+  color: rgba(255, 255, 255, 0.9);
   font-style: italic;
+  font-weight: 500;
 }
 
 .speech-bubble {
   position: relative;
   background: white;
-  border-radius: 15px;
-  padding: 12px 18px;
-  margin-top: 15px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-  max-width: 300px;
-  font-size: 14px;
+  border-radius: 20px;
+  padding: 16px 24px;
+  margin-top: 20px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  max-width: 400px;
+  font-size: 16px;
+  color: #333;
+  animation: fadeIn 0.3s ease-in;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(-10px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 .speech-bubble::before {
@@ -51,42 +79,119 @@
   top: -10px;
   left: 50%;
   transform: translateX(-50%);
-  border-left: 10px solid transparent;
-  border-right: 10px solid transparent;
-  border-bottom: 10px solid white;
+  border-left: 12px solid transparent;
+  border-right: 12px solid transparent;
+  border-bottom: 12px solid white;
 }
 
-.controls {
+/* Talk to pet section */
+.talk-section {
   width: 100%;
-  margin-top: 20px;
+  max-width: 600px;
+  margin-bottom: 30px;
+  background: rgba(255, 255, 255, 0.95);
+  padding: 20px;
+  border-radius: 16px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
 }
 
-.section {
-  margin-bottom: 20px;
-  padding: 15px;
-  background: #f5f5f5;
-  border-radius: 12px;
-}
-
-.section h3 {
-  margin: 0 0 10px 0;
-  font-size: 14px;
+.talk-section h3 {
+  margin: 0 0 15px 0;
+  font-size: 18px;
   color: #333;
 }
 
+.input-group {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.input-group input {
+  flex: 1;
+}
+
+.hint {
+  font-size: 12px;
+  color: #666;
+  margin: 5px 0 0 0;
+  font-style: italic;
+}
+
+/* Commands grid */
+.commands-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 20px;
+  width: 100%;
+  max-width: 1200px;
+  margin-bottom: 30px;
+}
+
+.command-card {
+  background: rgba(255, 255, 255, 0.95);
+  border-radius: 16px;
+  padding: 24px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+  transition: transform 0.2s, box-shadow 0.2s;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.command-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.15);
+}
+
+.command-icon {
+  font-size: 48px;
+  margin-bottom: 12px;
+}
+
+.command-card h4 {
+  margin: 0 0 12px 0;
+  font-size: 18px;
+  color: #333;
+  text-align: center;
+}
+
+.description {
+  font-size: 13px;
+  color: #666;
+  text-align: center;
+  margin: 0 0 16px 0;
+  line-height: 1.4;
+}
+
+.command-example {
+  font-size: 11px;
+  color: #999;
+  margin: 10px 0 0 0;
+  font-family: 'Courier New', monospace;
+  background: #f5f5f5;
+  padding: 6px 10px;
+  border-radius: 6px;
+  text-align: center;
+}
+
+/* Buttons */
 button {
-  background: #007AFF;
+  background: #667eea;
   color: white;
   border: none;
-  border-radius: 8px;
-  padding: 10px 20px;
+  border-radius: 10px;
+  padding: 12px 24px;
   font-size: 14px;
+  font-weight: 600;
   cursor: pointer;
   transition: all 0.2s;
+  width: 100%;
+  max-width: 200px;
 }
 
 button:hover {
-  background: #0056b3;
+  background: #5568d3;
   transform: scale(1.02);
 }
 
@@ -104,41 +209,171 @@ button.recording {
   50% { opacity: 0.7; }
 }
 
-input[type="text"] {
-  width: 100%;
-  padding: 10px;
-  border: 1px solid #ddd;
-  border-radius: 8px;
-  font-size: 14px;
-  margin-bottom: 10px;
+button.upload-btn {
+  background: #34C759;
+  margin-top: 10px;
 }
 
+button.upload-btn:hover {
+  background: #2da84a;
+}
+
+/* Inputs */
+input[type="text"],
+input[type="file"] {
+  width: 100%;
+  padding: 12px;
+  border: 2px solid #e0e0e0;
+  border-radius: 10px;
+  font-size: 14px;
+  margin-bottom: 12px;
+  transition: border-color 0.2s;
+}
+
+input[type="text"]:focus {
+  outline: none;
+  border-color: #667eea;
+}
+
+/* Image preview */
+.image-preview {
+  width: 100%;
+  margin-top: 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.image-preview img {
+  max-width: 100%;
+  max-height: 200px;
+  border-radius: 10px;
+  margin-bottom: 10px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+}
+
+/* Command reference */
+.command-reference {
+  background: rgba(255, 255, 255, 0.95);
+  border-radius: 16px;
+  padding: 24px;
+  width: 100%;
+  max-width: 600px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+  margin-bottom: 20px;
+}
+
+.command-reference h3 {
+  margin: 0 0 16px 0;
+  font-size: 18px;
+  color: #333;
+}
+
+.command-reference ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.command-reference li {
+  padding: 10px 0;
+  border-bottom: 1px solid #f0f0f0;
+  font-size: 14px;
+  color: #666;
+}
+
+.command-reference li:last-child {
+  border-bottom: none;
+}
+
+.command-reference code {
+  background: #f5f5f5;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  color: #667eea;
+}
+
+/* Moments display */
 .now-playing {
-  margin-top: 10px;
-  padding: 10px;
-  background: #E8F5E9;
-  border-radius: 8px;
-  font-size: 12px;
+  margin-top: 20px;
+  padding: 16px;
+  background: rgba(232, 245, 233, 0.95);
+  border-radius: 12px;
+  font-size: 14px;
   color: #2E7D32;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+  max-width: 400px;
 }
 
 .image-moment {
-  margin-top: 10px;
-  padding: 10px;
-  background: #FFF3E0;
-  border-radius: 8px;
+  margin-top: 20px;
+  padding: 16px;
+  background: rgba(255, 243, 224, 0.95);
+  border-radius: 12px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+  max-width: 400px;
 }
 
 .image-moment img {
   max-width: 100%;
-  border-radius: 8px;
-  margin-bottom: 5px;
+  border-radius: 10px;
+  margin-bottom: 10px;
 }
 
 .image-moment p {
-  font-size: 12px;
+  font-size: 14px;
   color: #E65100;
   margin: 0;
 }
 
+/* Debug panel */
+.debug-panel {
+  background: rgba(0, 0, 0, 0.8);
+  color: #0f0;
+  font-family: 'Courier New', monospace;
+  font-size: 12px;
+  padding: 15px;
+  border-radius: 8px;
+  max-width: 600px;
+  margin: 20px auto;
+}
 
+.debug-panel h4 {
+  margin: 0 0 10px 0;
+  color: #fff;
+}
+
+.debug-log {
+  max-height: 150px;
+  overflow-y: auto;
+  margin-bottom: 10px;
+}
+
+.debug-log div {
+  padding: 2px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.debug-state {
+  padding: 8px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+  margin-top: 10px;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .commands-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .pet-sprite {
+    font-size: 80px;
+  }
+  
+  .command-card {
+    padding: 20px;
+  }
+}

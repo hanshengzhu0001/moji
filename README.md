@@ -1,6 +1,6 @@
 # 🐱 Moji - Your AI Pet for iMessage
 
-> An intelligent AI pet that lives in your iMessage, powered by Photon AI, Dedalus Labs, ElevenLabs, and OpenAI.
+> An intelligent AI pet that lives in your iMessage, powered by Photon AI, OpenAI, and ElevenLabs.
 
 ![Moji Demo](https://img.shields.io/badge/Status-Complete-success)
 ![Platform](https://img.shields.io/badge/Platform-macOS-blue)
@@ -17,7 +17,7 @@ Moji is an AI-powered digital pet that seamlessly integrates with iMessage. It t
 - 😂 **Reacting intelligently** to messages with appropriate memes
 - 🎤 **Receiving voice notes** (auto-converts WebM → MP3)
 - 📸 **Sharing images** directly to iMessage
-- 🧠 **Understanding emotions** with Dedalus Agent AI
+- 🧠 **Understanding emotions** with intelligent mood classification
 - 🐱🐶🐦 **Responding with animal sounds** - actual meows, barks, and chirps!
 - 🎭 **Transforming appearance** - Pet morphs into different animals based on mood
 - 🖥️ **Beautiful desktop UI** with real-time voice feedback
@@ -27,7 +27,7 @@ Moji is an AI-powered digital pet that seamlessly integrates with iMessage. It t
 ## ✨ Key Features
 
 ### 1. 🎨 Smart Meme Generation
-Generate memes with simple commands. Dedalus Agent selects the perfect template and generates contextual text.
+Generate memes with simple commands. Our intelligent system selects the perfect template and generates contextual text.
 
 **Commands:**
 ```
@@ -94,8 +94,8 @@ The pet **morphs into different animals** based on the conversation:
 ┌─────────────────────────────────────────────────────────┐
 │                Pet Brain (Fastify + Bun)                 │
 │  ┌──────────────────────────────────────────────────┐  │
-│  │  Dedalus Agent - AI Decision Making              │  │
-│  │  • Mood classification (sad/stressed/excited)    │  │
+│  │  Mood Classification System                      │  │
+│  │  • Pattern-based mood detection                  │  │
 │  │  • Meme template selection                        │  │
 │  │  • Reaction decision logic                        │  │
 │  └──────────────────────────────────────────────────┘  │
@@ -231,7 +231,6 @@ moji meme: coffee addiction        # Alternative command
 | Technology | Purpose | Why We Chose It |
 |------------|---------|-----------------|
 | **Photon AI iMessage Kit** | iMessage integration | Only reliable way to programmatically access iMessage on macOS |
-| **Dedalus Labs Agent** | AI decision-making | Sophisticated mood classification and intelligent content decisions |
 | **OpenAI DALL-E 3** | Custom sticker generation | Best-in-class image generation for unique, high-quality stickers |
 | **ElevenLabs** | Voice synthesis (optional) | High-quality voice generation for enhanced responses |
 | **Imgflip API** | Meme templates | 100+ popular meme templates, fast and free |
@@ -259,7 +258,7 @@ moji meme: coffee addiction        # Alternative command
 1. **You send a message** (via UI or iMessage)
 2. **Photon AI Bridge** detects it via database polling
 3. **Pet Brain** receives the message
-4. **Dedalus Agent** classifies your mood (sad/stressed/excited/neutral)
+4. **Mood classification system** analyzes your message (sad/stressed/excited/neutral)
 5. **Pet responds** with:
    - Text bubble (mood-appropriate message)
    - Animal sound (meow/bark/chirp)
@@ -269,7 +268,7 @@ moji meme: coffee addiction        # Alternative command
 ### Meme Generation Flow
 
 1. **Command detected** (`@moji meme: finals stress`)
-2. **Dedalus Agent** analyzes the topic
+2. **System analyzes** the topic
 3. **Selects template** from 100+ Imgflip templates
 4. **Generates text** for top/bottom captions
 5. **Imgflip API** creates the meme
@@ -288,7 +287,7 @@ moji meme: coffee addiction        # Alternative command
 
 ## 📊 Project Statistics
 
-- **5 AI APIs** integrated seamlessly
+- **4 AI APIs** integrated seamlessly
 - **100+ meme templates** available
 - **3 animal voices** (cat, dog, bird)
 - **4 distinct moods** (excited, stressed, sad, neutral)
@@ -317,7 +316,7 @@ Talk to Moji: "I'm feeling sad"  → 🐦 Chirp!
 ### What Makes Moji Special
 
 1. **Photon AI** - Solved the "impossible" iMessage integration
-2. **Dedalus Labs** - Made the AI actually intelligent, not random
+2. **Intelligent Mood Detection** - Pattern-based emotion understanding
 3. **Animal Transformation** - Pet morphs based on your emotions
 4. **Real Animal Sounds** - Actual meows, barks, and chirps
 5. **Complete UX** - Voice + text + visual feedback
@@ -388,7 +387,6 @@ MIT License - see LICENSE file for details
 ### APIs & Services
 
 - **Photon AI** - Made iMessage integration possible
-- **Dedalus Labs** - Powered intelligent decision-making
 - **OpenAI** - DALL-E 3 for custom sticker generation
 - **ElevenLabs** - Voice synthesis capabilities
 - **Imgflip** - Extensive meme template library
@@ -403,7 +401,6 @@ MIT License - see LICENSE file for details
 
 Eligible for:
 - Best Use of Photon AI ⭐
-- Best Use of Dedalus Labs ⭐
 - Best Use of OpenAI ⭐
 - Best Use of ElevenLabs ⭐
 - Best Overall Hack ⭐
@@ -444,7 +441,7 @@ Open http://localhost:5173 and start chatting with your AI pet!
 
 ## 💡 What Makes Moji Unique
 
-1. **Multi-API Orchestration** - 5 AI services working together seamlessly
+1. **Multi-API Orchestration** - 4 AI services working together seamlessly
 2. **Emotional Intelligence** - Understands and responds to your feelings
 3. **Animal Transformation** - Pet morphs based on context (cat/dog/bird)
 4. **Real Animal Sounds** - Actual meows, barks, and chirps

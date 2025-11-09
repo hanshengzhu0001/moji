@@ -3,6 +3,8 @@ import { request } from "undici";
 
 const ELEVENLABS_API_KEY = process.env.ELEVENLABS_API_KEY!;
 const ELEVENLABS_API_URL = "https://api.elevenlabs.io/v1";
+// Default to true, set to "false" to disable voice generation
+const USE_ELEVENLABS_VOICE = process.env.USE_ELEVENLABS_VOICE !== "false";
 
 interface VoiceSettings {
   stability: number;
@@ -49,6 +51,12 @@ export async function generateAnimalVoice(
   voiceKind: "cat" | "dog" | "bird" = "cat",
   durationHint: "short" | "medium" | "long" = "medium"
 ): Promise<Buffer | null> {
+  // Skip voice generation if disabled via toggle
+  if (!USE_ELEVENLABS_VOICE) {
+    console.log(`[ELEVENLABS] Voice generation disabled (USE_ELEVENLABS_VOICE=false), skipping`);
+    return null;
+  }
+
   if (!ELEVENLABS_API_KEY) {
     console.warn("[ELEVENLABS] No API key provided, skipping voice generation");
     return null;

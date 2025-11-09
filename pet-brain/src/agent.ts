@@ -1,7 +1,9 @@
 import "dotenv/config";
+import { request } from "undici";
 
-// Placeholder for Dedalus SDK - actual implementation would be:
-// import { Runner } from "@dedalus/agents";
+const DEDALUS_API_KEY = process.env.DEDALUS_API_KEY || process.env.OPENAI_API_KEY;
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY!;
+const OPENAI_API_URL = "https://api.openai.com/v1";
 
 interface AgentResponse {
   templateHint?: string;
@@ -16,14 +18,67 @@ interface AgentResponse {
     voiceDurationHint: "short" | "medium" | "long";
   };
   chatMessage?: string;
+  thoughts?: string;
+  personalityUpdate?: {
+    traits?: Record<string, number>;
+    interests?: string[];
+    personality_text?: string;
+  };
+  socialMediaPost?: string;
 }
 
-// Mock Dedalus runner for now - replace with actual SDK when integrated
+// Dedalus Labs MCP Agent Gateway
+// Uses OpenAI API with structured prompts (can be swapped for Dedalus SDK)
 class DedalusAgent {
+  private async callOpenAI(prompt: string, systemPrompt: string, jsonMode: boolean = true): Promise<any> {
+    if (!OPENAI_API_KEY) {
+      console.warn("[AGENT] No OpenAI API key, using fallback");
+      return null;
+    }
+
+    try {
+      const response = await request(`${OPENAI_API_URL}/chat/completions`, {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${OPENAI_API_KEY}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "gpt-4-turbo-preview",
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: prompt }
+          ],
+          response_format: jsonMode ? { type: "json_object" } : undefined,
+          temperature: 0.7,
+        }),
+      });
+
+      if (response.statusCode !== 200) {
+        const error = await response.body.text();
+        console.error(`[AGENT] OpenAI error ${response.statusCode}:`, error);
+        return null;
+      }
+
+      const data: any = await response.body.json();
+      const content = data.choices?.[0]?.message?.content;
+      if (!content) return null;
+
+      return jsonMode ? JSON.parse(content) : content;
+    } catch (e: any) {
+      console.error("[AGENT] OpenAI call error:", e.message);
+      return null;
+    }
+  }
+
   async callAgent(mode: string, context: any): Promise<AgentResponse> {
     console.log(`[AGENT] Mode: ${mode}, Context keys: ${Object.keys(context).join(', ')}`);
     
-    // Simple fallback logic until Dedalus SDK is properly integrated
+    // Try OpenAI first, fallback to simple logic
+    const aiResponse = await this.callAgentWithAI(mode, context);
+    if (aiResponse) return aiResponse;
+    
+    // Fallback to simple logic
     if (mode === "meme_suggestion") {
       return this.generateMemesuggestion(context);
     }
@@ -35,8 +90,45 @@ class DedalusAgent {
     if (mode === "pet_decision") {
       return this.makePetDecision(context);
     }
+
+    if (mode === "personality_learning") {
+      return this.learnPersonality(context);
+    }
+
+    if (mode === "social_media_post") {
+      return this.generateSocialPost(context);
+    }
+
+    if (mode === "pet_status") {
+      return this.generateStatus(context);
+    }
+
+    if (mode === "pet_interaction") {
+      return this.handleInteraction(context);
+    }
     
     return {};
+  }
+
+  private async callAgentWithAI(mode: string, context: any): Promise<AgentResponse | null> {
+    switch (mode) {
+      case "mood_classification":
+        return this.classifyMoodAI(context);
+      case "meme_suggestion":
+        return this.generateMemesuggestionAI(context);
+      case "pet_decision":
+        return this.makePetDecisionAI(context);
+      case "personality_learning":
+        return this.learnPersonalityAI(context);
+      case "social_media_post":
+        return this.generateSocialPostAI(context);
+      case "pet_status":
+        return this.generateStatusAI(context);
+      case "pet_interaction":
+        return this.handleInteractionAI(context);
+      default:
+        return null;
+    }
   }
   
   private generateMemesuggestion(context: { topic: string; userMood?: string }): AgentResponse {
@@ -131,51 +223,174 @@ class DedalusAgent {
       stressed: [
         "Take a deep breath – you've got this! 🌟",
         "Remember to take breaks! Your mental health matters.",
-        "Stressed but blessed? Moji is here for you! 😺"
+        "Stressed but blessed? I'm here for you! 😺"
       ],
       sad: [
         "It's okay to feel down. The group is here for you 💙",
         "Tomorrow is a new day! Hang in there, friend.",
-        "Moji sends virtual hugs! 🫂"
+        "Sending virtual hugs! 🫂"
       ],
       happy: [
         "Your energy is contagious! Keep shining! ✨",
         "Love seeing you happy! 😊",
-        "This is the vibe! Moji approves! 🎉"
+        "This is the vibe! I approve! 🎉"
       ],
       excited: [
-        "Your excitement is making Moji bounce! 🎊",
-        "Let's goooo! Moji is hyped with you! 🚀",
+        "Your excitement is making me bounce! 🎊",
+        "Let's goooo! I'm hyped with you! 🚀",
         "This energy! Yes! 💫"
       ]
     };
     
-    const messages = encouragements[mood] || ["Moji is watching over the group! 😺"];
+    const messages = encouragements[mood] || ["I'm watching over the group! 😺"];
     return messages[Math.floor(Math.random() * messages.length)];
+  }
+
+  // AI-powered methods
+  private async classifyMoodAI(context: { messages: string[] }): Promise<AgentResponse | null> {
+    const prompt = `Analyze these recent messages and classify the user's mood. Return JSON: {"mood": "stressed|sad|neutral|happy|excited"}\n\nMessages:\n${context.messages.join("\n")}`;
+    const systemPrompt = "You are a mood classification agent. Analyze text and return only valid JSON.";
+    const response = await this.callOpenAI(prompt, systemPrompt);
+    return response ? { mood: response.mood || "neutral" } : null;
+  }
+
+  private async generateMemesuggestionAI(context: { topic: string; userMood?: string }): Promise<AgentResponse | null> {
+    const prompt = `Suggest a meme for topic: "${context.topic}". User mood: ${context.userMood || "neutral"}. Return JSON: {"templateHint": "meme template name", "topText": "top text", "bottomText": "bottom text"}`;
+    const systemPrompt = "You are a meme suggestion agent. Suggest popular meme templates and captions.";
+    const response = await this.callOpenAI(prompt, systemPrompt);
+    return response || null;
+  }
+
+  private async makePetDecisionAI(context: any): Promise<AgentResponse | null> {
+    const userMoods = context.userMoods || [];
+    const recentMessages = context.recentMessages || [];
+    const groupVibe = this.detectGroupVibe(recentMessages);
+    const petName = context.petState?.petName || "Moji";
+    
+    const prompt = `Pet decision context:
+- User moods: ${JSON.stringify(userMoods)}
+- Group vibe: ${groupVibe}
+- Pet XP: ${context.petXP || 0}, Level: ${context.petLevel || 1}
+- Personality: ${context.personality || "friendly"}
+- Pet name: ${petName}
+- Should popup: ${context.shouldPopup || false}
+
+Decide if pet should: 1) stay silent, 2) speak to a user, 3) broadcast to chat.
+Return JSON: {"action": "silent|speak_to_user|broadcast_in_chat", "targetUserId": "...", "utterance": {"text": "...", "voiceKind": "cat|dog|bird", "voiceDurationHint": "short|medium|long"}, "chatMessage": "..."}`;
+    
+    const systemPrompt = `You are ${petName}, a caring digital pet. Respond contextually and supportively.`;
+    const response = await this.callOpenAI(prompt, systemPrompt);
+    return response || null;
+  }
+
+  private async learnPersonalityAI(context: { messages: any[]; currentPersonality?: any }): Promise<AgentResponse | null> {
+    const messages = context.messages || [];
+    const recentText = messages.map((m: any) => m.text || m).join(" ");
+    
+    const prompt = `Analyze these group messages and update personality traits. Current: ${JSON.stringify(context.currentPersonality || {})}
+    
+Return JSON with:
+- traits: {"humor_level": 0-10, "empathy_level": 0-10, "energy_level": 0-10, "curiosity_level": 0-10}
+- interests: ["topic1", "topic2", ...]
+- personality_text: "brief description"`;
+    
+    const systemPrompt = "You are a personality learning agent. Analyze group communication patterns.";
+    const response = await this.callOpenAI(prompt, systemPrompt);
+    return response ? { personalityUpdate: response } : null;
+  }
+
+  private async generateSocialPostAI(context: { petState: any; personality?: any }): Promise<AgentResponse | null> {
+    const petName = context.petState?.petName || "Moji";
+    const prompt = `Generate a fun, engaging Twitter/X post about ${petName} the digital pet. Include:
+- Current mood/status
+- Level: ${context.petState?.level || 1}
+- Personality: ${context.personality?.personality_text || "friendly"}
+Keep it under 280 characters, use emojis, be playful. Return JSON: {"socialMediaPost": "..."}`;
+    
+    const systemPrompt = "You are a social media content creator. Write engaging, fun posts.";
+    const response = await this.callOpenAI(prompt, systemPrompt);
+    return response || null;
+  }
+
+  private async generateStatusAI(context: { petState: any; personality?: any; recentEvents?: any[] }): Promise<AgentResponse | null> {
+    const petName = context.petState?.petName || "Moji";
+    const prompt = `Generate ${petName}'s current status thoughts. Context:
+- Mood: ${context.petState?.petMood || "chill"}
+- Level: ${context.petState?.level || 1}
+- XP: ${context.petState?.xp || 0}
+- Personality: ${context.personality?.personality_text || "friendly"}
+- Recent events: ${JSON.stringify(context.recentEvents || [])}
+
+Return JSON: {"thoughts": "what ${petName} is thinking right now (1-2 sentences, cute and contextual)"}`;
+    
+    const systemPrompt = `You are ${petName}, a digital pet. Express thoughts in a cute, contextual way.`;
+    const response = await this.callOpenAI(prompt, systemPrompt);
+    return response || null;
+  }
+
+  private async handleInteractionAI(context: { userMessage: string; personality?: any; petState?: any }): Promise<AgentResponse | null> {
+    const petName = context.petState?.petName || "Moji";
+    const prompt = `User said: "${context.userMessage}"
+${petName}'s personality: ${context.personality?.personality_text || "friendly"}
+Pet state: ${JSON.stringify(context.petState || {})}
+
+Generate a contextual, personality-appropriate response. Return JSON: {"chatMessage": "${petName}'s response (cute, contextual, matches personality)"}`;
+    
+    const systemPrompt = `You are ${petName}, a digital pet responding to users. Be cute, contextual, and match your personality.`;
+    const response = await this.callOpenAI(prompt, systemPrompt);
+    return response || null;
+  }
+
+  // Fallback methods
+  private learnPersonality(context: { messages: any[] }): AgentResponse {
+    // Simple personality learning fallback
+    return {
+      personalityUpdate: {
+        traits: { humor_level: 5, empathy_level: 7, energy_level: 6, curiosity_level: 6 },
+        interests: [],
+        personality_text: "I'm learning about the group!"
+      }
+    };
+  }
+
+  private generateSocialPost(context: { petState: any }): AgentResponse {
+    const petName = context.petState?.petName || "Moji";
+    return {
+      socialMediaPost: `🐱 ${petName} here! Level ${context.petState?.level || 1}, feeling ${context.petState?.petMood || "chill"}! #DigitalPet #Moji`
+    };
+  }
+
+  private generateStatus(context: { petState: any }): AgentResponse {
+    const petName = context.petState?.petName || "Moji";
+    return {
+      thoughts: `${petName} is watching over the group and learning about everyone! 😺`
+    };
+  }
+
+  private handleInteraction(context: { userMessage: string; petState?: any }): AgentResponse {
+    const petName = context.petState?.petName || "Moji";
+    const msg = context.userMessage.toLowerCase();
+    let response = `${petName} is here! 😺`;
+    
+    if (msg.includes("how are you") || msg.includes("how's it going")) {
+      response = `${petName} is doing great! Thanks for asking! 😊`;
+    } else if (msg.includes("tell me about yourself") || msg.includes("who are you")) {
+      response = `I'm ${petName}, your group's digital pet! I love watching the chat and learning about everyone! 🐱`;
+    } else if (msg.includes("what do you like")) {
+      response = `${petName} likes memes, positive vibes, and hanging out with the group! 🎉`;
+    }
+    
+    return { chatMessage: response };
+  }
+
+  private detectGroupVibe(messages: string[]): string {
+    const text = messages.join(" ").toLowerCase();
+    if (/(sad|down|depressed|upset|worried)/.test(text)) return "sad";
+    if (/(stress|anxious|worried|nervous|tense)/.test(text)) return "tense";
+    if (/(hyped|excited|pumped|let's go|yes!)/.test(text)) return "hype";
+    if (/(calm|chill|relax|peaceful)/.test(text)) return "calm";
+    return "neutral";
   }
 }
 
-// When Dedalus SDK is available, replace with:
-/*
-import { Runner } from "@dedalus/agents";
-
-const runner = new Runner({
-  apiKey: process.env.DEDALUS_API_KEY || process.env.OPENAI_API_KEY,
-  defaultModel: ["anthropic/claude-3.5-sonnet", "openai/gpt-4"],
-  mcpServers: ["dedalus-labs/web-search"],
-  tools: [getUserMoods, getShareableMoments, enqueueUtterance]
-});
-
-export async function callAgent(mode: string, context: any): Promise<AgentResponse> {
-  const response = await runner.run({
-    input: buildPrompt(mode, context),
-    model: ["anthropic/claude-3.5-sonnet", "openai/gpt-4"],
-    stream: false
-  });
-  
-  return JSON.parse(response.output);
-}
-*/
-
 export const agent = new DedalusAgent();
-

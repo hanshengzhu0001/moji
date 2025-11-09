@@ -12,6 +12,7 @@ import { generatePetAvatar } from "./avatar";
 import { awardXP, isPositiveMessage, getXPProgress } from "./xp";
 import { learnFromMessages, getPersonality } from "./personality";
 import { generateShareablePost, postToTwitter } from "./social";
+import { detectVibeFromMessages } from "./vibe";
 
 const PORT = parseInt(process.env.PORT || "3001");
 const BRIDGE_URL = process.env.BRIDGE_URL || "http://localhost:3000";
@@ -911,29 +912,23 @@ function generateFictionalEvent(): { event_type: string; description: string; fi
 }
 
 // Detect group vibe from recent messages
-function detectGroupVibe(db: Database, messageLimit: number = 20): string {
-  const recentMessages: any[] = db.prepare(`
+function detectGroupVibe(db: Database, messageLimit: number = 30): string {
+  const recentMessages: any[] = db
+    .prepare(
+      `
     SELECT text FROM messages 
     ORDER BY ts DESC 
     LIMIT ?
-  `).all(messageLimit);
-  
-  if (recentMessages.length === 0) return "neutral";
-  
-  const text = recentMessages.map(m => m.text || "").join(" ").toLowerCase();
-  
-  // Count emotional indicators
-  const sadCount = (text.match(/(sad|down|depressed|upset|worried|disappointed)/g) || []).length;
-  const tenseCount = (text.match(/(stress|anxious|worried|nervous|tense|panic|overwhelmed)/g) || []).length;
-  const hypeCount = (text.match(/(hyped|excited|pumped|let's go|yes!|woo|awesome!)/g) || []).length;
-  const calmCount = (text.match(/(calm|chill|relax|peaceful|zen)/g) || []).length;
-  
-  if (sadCount > 2) return "sad";
-  if (tenseCount > 2) return "tense";
-  if (hypeCount > 2) return "hype";
-  if (calmCount > 2) return "calm";
-  
-  return "neutral";
+  `
+    )
+    .all(messageLimit);
+
+  if (!recentMessages.length) {
+    return "neutral";
+  }
+
+  const texts = recentMessages.map((m) => m.text || "");
+  return detectVibeFromMessages(texts, 6);
 }
 
 // Tick endpoint for periodic agent decisions (uses Dedalus Agent)

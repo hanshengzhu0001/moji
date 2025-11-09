@@ -1,5 +1,6 @@
 import "dotenv/config";
 import { request } from "undici";
+import { detectVibeFromMessages } from "./vibe";
 
 const DEDALUS_API_KEY = process.env.DEDALUS_API_KEY || process.env.OPENAI_API_KEY;
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY!;
@@ -402,12 +403,7 @@ Generate a contextual, personality-appropriate response. Return JSON: {"chatMess
   }
 
   private detectGroupVibe(messages: string[]): string {
-    const text = messages.join(" ").toLowerCase();
-    if (/(sad|down|depressed|upset|worried)/.test(text)) return "sad";
-    if (/(stress|anxious|worried|nervous|tense)/.test(text)) return "tense";
-    if (/(hyped|excited|pumped|let's go|yes!)/.test(text)) return "hype";
-    if (/(calm|chill|relax|peaceful)/.test(text)) return "calm";
-    return "neutral";
+    return detectVibeFromMessages(messages || [], 6);
   }
 }
 

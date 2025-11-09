@@ -196,6 +196,10 @@ class DedalusAgent {
   }
   
   private makePetDecision(context: any): AgentResponse {
+    const shouldPopup = Boolean(context.shouldPopup);
+    if (!shouldPopup) {
+      return { action: "silent" };
+    }
     // Simple logic - occasionally have pet speak
     const random = Math.random();
     
@@ -266,6 +270,7 @@ class DedalusAgent {
     const recentMessages = context.recentMessages || [];
     const groupVibe = this.detectGroupVibe(recentMessages);
     const petName = context.petState?.petName || "Moji";
+    const shouldPopup = Boolean(context.shouldPopup);
     
     const prompt = `Pet decision context:
 - User moods: ${JSON.stringify(userMoods)}
@@ -273,14 +278,27 @@ class DedalusAgent {
 - Pet XP: ${context.petXP || 0}, Level: ${context.petLevel || 1}
 - Personality: ${context.personality || "friendly"}
 - Pet name: ${petName}
-- Should popup: ${context.shouldPopup || false}
+- Should popup: ${shouldPopup}
 
 Decide if pet should: 1) stay silent, 2) speak to a user, 3) broadcast to chat.
+Rules:
+- If "Should popup" is false, you MUST respond with {"action":"silent"}.
+- Only when "Should popup" is true may you choose "speak_to_user" or "broadcast_in_chat".
+- Prefer "speak_to_user" when the group vibe is sad/tense and a specific user could benefit.
+- Prefer "broadcast_in_chat" only when the vibe is strong (sad/tense/hype) and Should popup is true.
+
 Return JSON: {"action": "silent|speak_to_user|broadcast_in_chat", "targetUserId": "...", "utterance": {"text": "...", "voiceKind": "cat|dog|bird", "voiceDurationHint": "short|medium|long"}, "chatMessage": "..."}`;
     
     const systemPrompt = `You are ${petName}, a caring digital pet. Respond contextually and supportively.`;
     const response = await this.callOpenAI(prompt, systemPrompt);
-    return response || null;
+    if (!response) return null;
+    if (!shouldPopup) {
+      response.action = "silent";
+      delete response.chatMessage;
+      delete response.utterance;
+      delete response.targetUserId;
+    }
+    return response;
   }
 
   private async learnPersonalityAI(context: { messages: any[]; currentPersonality?: any }): Promise<AgentResponse | null> {

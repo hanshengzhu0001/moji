@@ -187,12 +187,32 @@ function findTemplate(hint: string): any | null {
   return match ? match[1] : null;
 }
 
+function limitSentences(text: string, maxSentences: number): string {
+  if (!text) return text;
+  const normalized = text.replace(/\s+/g, " ").trim();
+  if (!normalized) return normalized;
+  const sentences = normalized.match(/[^.!?]+[.!?]*/g);
+  if (!sentences || sentences.length <= maxSentences) {
+    return normalized;
+  }
+  return sentences.slice(0, maxSentences).join(" ").trim();
+}
+
 // Initialize
 await loadMemes();
 
+const TARGET_CHAT_ID = process.env.TARGET_CHAT_ID || "default";
+
 // Ensure default group exists
 const stmt = db.prepare("INSERT OR IGNORE INTO groups (groupId, chatId, petName, petMood, xp, level, personality_traits, interests, random_mood_factor) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
-stmt.run("main", process.env.TARGET_CHAT_ID || "default", "Moji", "chill", 0, 1, "{}", "[]", 0.0);
+stmt.run("main", TARGET_CHAT_ID, "Moji", "chill", 0, 1, "{}", "[]", 0.0);
+
+// Make sure stored chatId stays in sync with env override
+const storedGroup: any = db.prepare("SELECT chatId FROM groups WHERE groupId = ?").get("main");
+if (storedGroup && storedGroup.chatId !== TARGET_CHAT_ID) {
+  console.log(`[BOOT] Updating stored chatId from ${storedGroup.chatId} to ${TARGET_CHAT_ID}`);
+  db.prepare("UPDATE groups SET chatId = ? WHERE groupId = ?").run(TARGET_CHAT_ID, "main");
+}
 
 // Initialize pet personality if not exists
 const personalityStmt = db.prepare("INSERT OR IGNORE INTO pet_personality (groupId, traits, interests, learned_context, personality_text) VALUES (?, ?, ?, ?, ?)");
@@ -537,6 +557,7 @@ fastify.post<{ Body: { chatId: string; userId: string } }>(
         recentEvents
       });
       thoughts = statusResponse?.thoughts || thoughts;
+      thoughts = limitSentences(thoughts, 2);
     } catch (e) {
       console.error("[STATUS] Agent error:", e);
       // Use default thoughts if agent fails
@@ -617,6 +638,7 @@ fastify.post<{ Body: { chatId: string; userId: string; userMessage: string } }>(
         petState: { ...group, petName }
       });
       response = agentResponse?.chatMessage || response;
+      response = limitSentences(response, 4);
     } catch (e) {
       console.error("[INTERACTION] Agent error:", e);
       // Use fallback response if agent fails
@@ -975,7 +997,12 @@ fastify.post('/tick', async (req, reply) => {
   if (groupVibe === "sad" || groupVibe === "tense") popupProbability += 0.3; // +30% for negative vibes
   if (groupVibe === "hype") popupProbability += 0.2; // +20% for hype
   
-  const shouldPopup = Math.random() < popupProbability;
+  const random = Math.random();
+  const shouldPopup = random < popupProbability;
+
+  console.log("random: ", random);
+  console.log("popupProbability: ", popupProbability);
+  console.log("shouldPopup: ", shouldPopup);
   
   // Call Dedalus Agent for pet decision
   try {
@@ -989,6 +1016,11 @@ fastify.post('/tick', async (req, reply) => {
       recentMessages: recentMessages.map(m => m.text),
       shouldPopup
     });
+    
+    if (!shouldPopup && agentResponse.action !== "silent") {
+      console.log("[TICK] Ignoring non-silent action because shouldPopup=false");
+      return { success: true, skipped: true };
+    }
     
     if (agentResponse.action === "speak_to_user" && agentResponse.utterance) {
       const { targetUserId, utterance } = agentResponse;

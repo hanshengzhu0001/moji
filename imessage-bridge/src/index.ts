@@ -48,6 +48,36 @@ const MOJI_RENAME_PATTERNS = [
   /@moji\s+my\s+name\s+is\s+(.+)/i,
 ];
 
+function extractGenericMojiInteraction(text: string): string | null {
+  const match = text.match(/@moji\s+(.+)/i);
+  if (!match || !match[1]) return null;
+  const content = match[1].trim();
+  if (!content) return null;
+
+  const lower = content.toLowerCase();
+  const disallowedPrefixes = [
+    "status",
+    "how are you",
+    "info",
+    "share",
+    "post",
+    "tweet",
+    "meme",
+    "sticker",
+    "name",
+    "rename",
+    "call me",
+    "generate",
+    "shareable"
+  ];
+
+  if (disallowedPrefixes.some(prefix => lower.startsWith(prefix))) {
+    return null;
+  }
+
+  return content;
+}
+
 function extractMemeRequest(text: string): string | null {
   for (const pattern of MOJI_MEME_PATTERNS) {
     const match = text.match(pattern);
@@ -237,6 +267,25 @@ async function processMessage(message: any) {
       }
       return;
     }
+
+  const genericInteraction = extractGenericMojiInteraction(text);
+  if (genericInteraction) {
+    console.log(`[INTERACTION REQ] Generic from ${userId.slice(0, 15)}: "${genericInteraction}"`);
+    try {
+      await request(`${BRAIN_URL}/events/interaction-request`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          chatId: message.chatId,
+          userId,
+          userMessage: genericInteraction
+        })
+      });
+    } catch (e) {
+      console.error("[INTERACTION REQ] Error:", e);
+    }
+    return;
+  }
     
     // Forward all messages to Brain
     try {
@@ -302,6 +351,20 @@ function getMessageTimestamp(message: any): number {
   return 0;
 }
 
+function isMessageFromSelf(message: any): boolean {
+  if (typeof message.isFromMe === "boolean") {
+    return message.isFromMe;
+  }
+  if (typeof (message as any).is_from_me === "boolean") {
+    return (message as any).is_from_me;
+  }
+  // Fallback: some SDKs expose `sender` or `handle` info. If sender is empty, assume from me.
+  if (!message.sender && message.isFromMe === undefined) {
+    return true;
+  }
+  return false;
+}
+
 async function pollMessages() {
   console.log(`[POLL] Starting message polling for chat: ${TARGET_CHAT_ID}`);
   while (true) {
@@ -332,12 +395,19 @@ async function pollMessages() {
         if (processedMessageIds.has(messageId)) {
           continue;
         }
+
+        // Skip messages sent by Moji itself to avoid double-processing
+        if (isMessageFromSelf(message)) {
+          processedMessageIds.add(messageId);
+          continue;
+        }
         
         // CRITICAL: Only process messages received AFTER process started
         const messageTimestamp = getMessageTimestamp(message);
         if (messageTimestamp < PROCESS_START_TIME) {
           // This is an old message - skip it
           skippedOldCount++;
+          processedMessageIds.add(messageId);
           continue;
         }
         

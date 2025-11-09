@@ -79,6 +79,54 @@ Moji is an AI-powered digital pet that lives in your iMessage, transforming your
 
 ---
 
+## Built with
+
+### Quick List (for Devpost)
+**TypeScript, JavaScript, React, Fastify, Bun, Node.js, SQLite, Photon AI, OpenAI DALL-E 3, ElevenLabs, Imgflip API, ffmpeg, macOS, Vite**
+
+### Detailed Breakdown
+
+#### Languages
+- **TypeScript** - Type-safe JavaScript for all backend and frontend code
+- **JavaScript** - Runtime language
+- **SQL** - Database queries
+
+#### Frameworks & Libraries
+- **React** - UI framework for desktop application
+- **Fastify** - High-performance web framework for backend services
+- **Vite** - Build tool and development server
+- **Bun** - Fast JavaScript runtime for backend services
+
+#### Platforms
+- **macOS** - Operating system (required for iMessage integration)
+- **Node.js** - JavaScript runtime environment
+- **Browser** - Chrome/Firefox/Safari for desktop UI
+
+#### APIs & Services
+- **Photon AI iMessage Kit** - iMessage integration and message handling
+- **OpenAI DALL-E 3** - Custom sticker generation from text prompts
+- **ElevenLabs** - Natural animal voice synthesis (text-to-speech)
+- **Imgflip API** - Meme template library (100+ templates)
+
+#### Databases
+- **SQLite** - Lightweight database for state management, message storage, and user data
+
+#### Tools & Utilities
+- **ffmpeg** - Audio/video processing (WebM to MP3 conversion)
+- **Git** - Version control
+- **npm** - Package management for Node.js
+- **Bun** - Package management and runtime
+
+#### Cloud Services (Optional)
+- **AWS S3** - Optional cloud storage for audio files (if configured)
+
+#### Development Tools
+- **VS Code** - Code editor
+- **Chrome DevTools** - Browser debugging
+- **Postman/curl** - API testing
+
+---
+
 ## How we built it
 
 ### Architecture
